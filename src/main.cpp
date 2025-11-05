@@ -82,7 +82,7 @@ void autonomous(void) {
 
 void usercontrol(void) {
   // User control code here, inside the loop
-  while (1) {
+  while (1) { 
     // Get the position of the joysticks
     int drivePower = Controller1.Axis3.position(percent); // Left joystick Y-axis (Forward/Reverse)
     int turnPower = Controller1.Axis1.position(percent); // Right joystick X-axis (Turning)
