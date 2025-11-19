@@ -106,8 +106,8 @@ void usercontrol(void) {
     leftSide.setVelocity(leftOutput, percent);
     rightSide.setVelocity(rightOutput, percent);
 
-    leftSide.spin(forward);
-    rightSide.spin(reverse);
+    leftSide.spin(reverse);
+    rightSide.spin(forward);
 
     wait(20, msec);
   }
