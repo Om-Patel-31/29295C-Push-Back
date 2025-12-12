@@ -1,0 +1,9 @@
+LEFT:
+front = 10
+back = 3
+top = 5
+
+RIGHT:
+front = 2
+back = 4
+top = 6
