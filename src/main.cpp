@@ -121,7 +121,7 @@ void pistonsToggle() {
 }
 
 // Deadzone
-const int DEADZONE_THRESHOLD = 5;
+const int DEADZONE_THRESHOLD = 10;
 
 // Simple slew-rate limiter for doubles
 static double slewTo(double target, double current, double maxDelta) {
@@ -144,7 +144,8 @@ static double slewTo(double target, double current, double maxDelta) {
 }
 
 // Runtime-configurable slew delta (percent per control loop iteration)
-double slewMaxDelta = 6.0;
+// Increased to make joystick -> motor response faster. Tune down if too twitchy.
+double slewMaxDelta = 7.0;
 
 void increaseSlew() {
   if (slewMaxDelta < 50.0) slewMaxDelta++;
@@ -161,15 +162,16 @@ void decreaseSlew() {
 }
 
 // Turn sensitivity (percent). 100 = normal
-int turnSensitivity = 32;
+int turnSensitivity = 30;
 
 // Deceleration step when controller released (percent per loop)
-const double DECEL_STEP = 1.5;
+// Increased to reduce coasting delay when sticks released.
+const double DECEL_STEP = 1;
 
 // --------------------
 // MODE SELECTOR
 // --------------------
-bool skillsMode = false;  
+bool skillsMode = true;  
 // false = Match Autonomous
 // true  = Skills Autonomous
 
@@ -213,7 +215,7 @@ void skillsAuton() {
   */
   double objDist = DistanceSensor.objectDistance(inches);
   Drivetrain.drive(forward);
-  while (objDist < 16.5) wait(5, msec); 
+  while (objDist < 16.5) wait(1, msec); 
   Drivetrain.stop();
   matchLoaderToggle();
   intakeMotor.spin(reverse);
@@ -224,13 +226,19 @@ void skillsAuton() {
   while (inertialSensor.rotation() > -30) wait(1, msec);
   Drivetrain.stop();
   Drivetrain.drive(fwd);
-  while (objDist < 30) wait(5, msec);
+  while (objDist < 30) wait(1, msec);
   Drivetrain.stop();
   intakeMotor.spin(forward);
   wait(1500, msec);
   intakeMotor.stop();
   Drivetrain.drive(reverse);
-  while (objDist > 20) wait(5, msec); 
+  while (objDist > 20) wait(1, msec); 
+  Drivetrain.stop();
+  Drivetrain.turn(left);
+  while (inertialSensor.rotation() > -90) wait(1, msec);
+  Drivetrain.stop();
+  Drivetrain.drive(fwd);
+  while (objDist < 35) wait(1, msec);
   Drivetrain.stop();
 }
 
@@ -243,12 +251,13 @@ void calibrateIMU() {
   Brain.Screen.print("Calibrating IMU...");
   inertialSensor.calibrate();
   while (inertialSensor.isCalibrating()) {
-    wait(50, msec);
+    wait(5, msec);
   }
   Brain.Screen.clearLine(1);
   Brain.Screen.setCursor(1, 1);
   Brain.Screen.print("IMU Ready");
-  wait(200, msec);
+  Controller1.Screen.print("IMU Ready");
+  wait(20, msec);
 }
 
 void pre_auton(void) {
@@ -366,7 +375,7 @@ void usercontrol(void) {
     Brain.Screen.setCursor(6, 1);
     Brain.Screen.print("Dist: %.1f in  H: %.1f deg", dist_in, heading_deg);
 
-    wait(20, msec);
+    wait(5, msec);
   }
 }
 
@@ -376,7 +385,7 @@ void usercontrol(void) {
 int main() {
   Competition.autonomous(autonomous);
   Competition.drivercontrol(usercontrol);
-
+  Controller1.ButtonY.pressed(autonomous);
   pre_auton();
 
   while (true) wait(100, msec);
