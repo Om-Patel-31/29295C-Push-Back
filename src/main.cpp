@@ -1,204 +1,132 @@
-  /*----------------------------------------------------------------------------*/
-  /*                                                                            */
-  /*    Module: main.cpp                                                        */
-  /*    Created: 10/9/2025                                                      */
-  /*                                                                            */
-  /*----------------------------------------------------------------------------*/
+#include "vex.h"
+#include <cmath>
+using namespace vex;
 
-  #include "vex.h"
-  #include <cmath>
-  using namespace vex;
+competition Competition;
 
-  // A global instance of competition
-  competition Competition;
+class PIDController {
+public:
+  double kP, kI, kD;
+  double integral = 0.0;
+  double prevError = 0.0;
+  double maxIntegral = 50.0;
+  double tolerance = 1.0;
+  bool enabled = false;
+  double lastP = 0.0;
+  double lastI = 0.0;
+  double lastD = 0.0;
 
-  // --------------------
-  // PID CONTROLLER CLASS
-  // --------------------
-  // PID (Proportional-Integral-Derivative) controller for precise motor control
-  // - Proportional (P): Responds to current error, makes quick corrections
-  // - Integral (I): Accumulates error over time, eliminates steady-state errors
-  // - Derivative (D): Predicts future error, smooths out overshooting
-  // 
-  // Usage: Create instance with gains -> calculate() in control loop -> check atTarget()
-  // Typical gains: P=0.5-1.0, I=0.01-0.05, D=0.1-0.3 (tune for your robot)
-  // 
-  class PIDController {
-  public:
-    double kP, kI, kD;
-    double integral = 0.0;      // Accumulated error for I term
-    double prevError = 0.0;     // Previous error for D term
-    double maxIntegral = 50.0;  // Anti-windup: prevents integral from growing too large
-    double tolerance = 1.0;     // How close to target before considered "done" (units depend on usage)
-    bool enabled = false;
+  PIDController(double p, double i, double d) : kP(p), kI(i), kD(d) {}
 
-    // Constructor: Initialize with P, I, D gains
-    // Example: PIDController drivePID(0.5, 0.02, 0.1);
-    PIDController(double p, double i, double d) : kP(p), kI(i), kD(d) {}
+  double calculate(double error, double dt) {
+    lastP = kP * error;
 
-    // Calculate PID output based on error and time delta
-    // error: difference between target and current value
-    // dt: time since last call in seconds (typically 0.01 for 10ms loop)
-    // Returns: control output to apply to motor (-100 to 100 for velocity)
-    double calculate(double error, double dt) {
-      // Proportional term: immediate response proportional to error
-      double pTerm = kP * error;
+    integral += error * dt;
+    if (integral > maxIntegral) integral = maxIntegral;
+    if (integral < -maxIntegral) integral = -maxIntegral;
+    lastI = kI * integral;
 
-      // Integral term with anti-windup (prevents accumulation in steady state)
-      integral += error * dt;
-      if (integral > maxIntegral) integral = maxIntegral;
-      if (integral < -maxIntegral) integral = -maxIntegral;
-      double iTerm = kI * integral;
-
-      // Derivative term: rate of change prevents overshoot
-      double dTerm = 0.0;
-      if (dt > 0) {
-        dTerm = kD * (error - prevError) / dt;
-      }
-      prevError = error;
-
-      return pTerm + iTerm + dTerm;
+    lastD = 0.0;
+    if (dt > 0) {
+      lastD = kD * (error - prevError) / dt;
     }
 
-    // Reset integral and error tracking (call before each new movement)
-    void reset() {
-      integral = 0.0;
-      prevError = 0.0;
-    }
+    prevError = error;
 
-    // Check if error is within tolerance (movement is complete)
-    bool atTarget(double error) {
-      return std::abs(error) < tolerance;
-    }
-  };
+    return lastP + lastI + lastD;
+  }
 
-  // --------------------
-  // ODOMETRY TRACKER
-  // --------------------
-  // Odometry tracks the robot's position and orientation on the field
-  // Updates position using wheel encoder distances and IMU heading
-  // Allows for path planning and position-based autonomous routines
-  // 
-  // Usage: Call update() in control loop -> query position via x/y/heading or use helper functions
-  // Note: Accuracy depends on encoder calibration and IMU drift; periodic recalibration recommended
-  // 
-  class OdometryTracker {
-  public:
-    double x = 0.0;      // X position (inches) - typically forward/backward
-    double y = 0.0;      // Y position (inches) - typically left/right
-    double heading = 0.0; // Heading (degrees) - robot orientation, 0-360 or ±180
-    double wheelBase = 7.5; // Distance between left/right wheels (inches) - tune for your robot
-    double trackingWheelRadius = 1.0; // Tracking wheel radius (inches) - tune for your robot
+  void reset() {
+    integral = 0.0;
+    prevError = 0.0;
+  }
 
-    // Update position based on encoder distances and IMU heading
-    // leftDist: distance traveled by left side (inches)
-    // rightDist: distance traveled by right side (inches)
-    // imuHeading: current heading from IMU sensor (degrees)
-    void update(double leftDist, double rightDist, double imuHeading) {
-      // Calculate average distance both sides traveled
-      double avgDist = (leftDist + rightDist) / 2.0;
+  bool atTarget(double error) {
+    return std::abs(error) < tolerance;
+  }
+};
 
-      // Use IMU heading (more accurate than encoder-based heading)
-      heading = imuHeading;
+class OdometryTracker {
+public:
+  double x = 0.0;
+  double y = 0.0;
+  double heading = 0.0;
+  double wheelBase = 10;
+  double trackingWheelRadius = 3.25;
 
-      // Update position using forward kinematics
-      // Assumes robot moves in direction of heading
-      double headingRad = heading * M_PI / 180.0;
-      x += avgDist * std::cos(headingRad);
-      y += avgDist * std::sin(headingRad);
-    }
+  void update(double leftDist, double rightDist, double imuHeading) {
+    double avgDist = (leftDist + rightDist) / 2.0;
 
-    // Reset position to origin (0, 0) facing heading 0
-    void reset() {
-      x = 0.0;
-      y = 0.0;
-      heading = 0.0;
-    }
+    heading = imuHeading;
 
-    // Manually set position and heading (useful for field corrections)
-    void setPosition(double newX, double newY, double newHeading) {
-      x = newX;
-      y = newY;
-      heading = newHeading;
-    }
+    double headingRad = heading * M_PI / 180.0;
+    x += avgDist * std::cos(headingRad);
+    y += avgDist * std::sin(headingRad);
+  }
 
-    // Calculate straight-line distance from current position to target
-    // Useful for determining when robot has reached a location
-    double distanceTo(double targetX, double targetY) {
-      double dx = targetX - x;
-      double dy = targetY - y;
-      return std::sqrt(dx * dx + dy * dy);
-    }
+  void reset() {
+    x = 0.0;
+    y = 0.0;
+    heading = 0.0;
+  }
 
-    // Calculate heading angle needed to face target position
-    // Useful for path planning: turn to this heading, then drive
-    double headingTo(double targetX, double targetY) {
-      double dx = targetX - x;
-      double dy = targetY - y;
-      return std::atan2(dy, dx) * 180.0 / M_PI;
-    }
-  };
+  void setPosition(double newX, double newY, double newHeading) {
+    x = newX;
+    y = newY;
+    heading = newHeading;
+  }
 
-  // --------------------
-  // GLOBALS
-  // --------------------
-  vex::brain Brain;
-  vex::controller Controller1;
+  double distanceTo(double targetX, double targetY) {
+    double dx = targetX - x;
+    double dy = targetY - y;
+    return std::sqrt(dx * dx + dy * dy);
+  }
 
-  // Front Motors
-  vex::motor leftFront(vex::PORT5, ratio6_1, true);
-  vex::motor rightFront(vex::PORT10, ratio6_1, false);
+  double headingTo(double targetX, double targetY) {
+    double dx = targetX - x;
+    double dy = targetY - y;
+    return std::atan2(dy, dx) * 180.0 / M_PI;
+  }
+};
 
-  // Back Motors
-  vex::motor leftBack(vex::PORT3, ratio6_1, true);
-  vex::motor rightBack(vex::PORT7, ratio6_1, false);
+vex::brain Brain;
+vex::controller Controller1;
 
-  // Top Motors
-  vex::motor leftTop(vex::PORT4, ratio6_1, false);
-  vex::motor rightTop(vex::PORT8, ratio6_1, true);
+vex::motor leftFront(vex::PORT5, ratio6_1, true);
+vex::motor rightFront(vex::PORT10, ratio6_1, false);
 
-  // Motor Groups
-  vex::motor_group rightSide(rightFront, rightBack, rightTop);
-  vex::motor_group leftSide(leftFront, leftBack, leftTop);
+vex::motor leftBack(vex::PORT3, ratio6_1, true);
+vex::motor rightBack(vex::PORT7, ratio6_1, false);
 
-  // Drivetrain
-  vex::drivetrain Drivetrain(leftSide, rightSide, 259.34, 320, 40, mm, 1);
+vex::motor leftTop(vex::PORT4, ratio6_1, false);
+vex::motor rightTop(vex::PORT8, ratio6_1, true);
 
-  // Motors
-  vex::motor intakeMotor(vex::PORT1, ratio6_1, true);
-  vex::motor outputMotor(vex::PORT6, ratio6_1, false);
+vex::motor_group rightSide(rightFront, rightBack, rightTop);
+vex::motor_group leftSide(leftFront, leftBack, leftTop);
 
-  // Pneumatics (use brain three-wire ports)
-  digital_out Blocker(Brain.ThreeWirePort.A);
-  digital_out MatchLoader(Brain.ThreeWirePort.B);
-  digital_out Pistons(Brain.ThreeWirePort.C);
+vex::drivetrain Drivetrain(leftSide, rightSide, 259.34, 320, 40, mm, 1);
 
-  // Sensors
-  vex::inertial inertialSensor = vex::inertial(PORT21);
-  vex::distance DistanceSensor = vex::distance(PORT9);
+vex::motor intakeMotor(vex::PORT1, ratio6_1, true);
+vex::motor outputMotor(vex::PORT6, ratio6_1, false);
 
-  // --------------------
-  // PID CONTROLLERS & ODOMETRY
-  // --------------------
-  // PID for driving forward/backward (tune these values for your robot)
-  // Start with: kP=0.5, kI=0.02, kD=0.1
-  // Increase kP if response is too slow, decrease if overshooting
-  // Increase kD if oscillating, decrease if too sluggish
-  PIDController drivePID(1.0, 0.01, 0.1);
-  
-  // PID for turning (tune these values for your robot)
-  // Start with: kP=0.8, kI=0.01, kD=0.15
-  // Typically needs higher P and D than drive for precise heading control
-  PIDController turnPID(0.8, 0.01, 0.15);
-  
-  // Odometry tracker - maintains robot position and heading throughout match
-  OdometryTracker odometry;
+digital_out Blocker(Brain.ThreeWirePort.A);
+digital_out MatchLoader(Brain.ThreeWirePort.B);
+digital_out Pistons(Brain.ThreeWirePort.C);
 
-  // --------------------
-  // CALLBACK HANDLERS
-  // --------------------
-  // Intake callbacks (R1 = forward, R2 = reverse)
-  void intakeForwardPressed() { 
+vex::inertial inertialSensor = vex::inertial(PORT21);
+
+PIDController drivePID(3, 0.05, 0.00001);
+PIDController turnPID(0.5, 0.01, 0.05);
+OdometryTracker odometry;
+
+// Forward declarations for functions defined later
+void updateOdometry();
+void calibrateIMU();
+extern bool matchAutonSide;
+
+const int IMU_distance = 8;
+
+void intakeForwardPressed() { 
     intakeMotor.spin(reverse); 
   }
   void intakeForwardReleased() { 
@@ -214,8 +142,7 @@
       intakeMotor.stop(); 
   }
 
-  // Scoring/output callbacks (L1 = forward, L2 = reverse)
-  void outputForwardPressed() { 
+void outputForwardPressed() { 
     outputMotor.spin(forward); 
   }
   void outputForwardReleased() { 
@@ -252,13 +179,11 @@
     outputReverseReleased();
   }
 
-  // Pneumatic states
-  bool blockerExtended = false;
+bool blockerExtended = false;
   bool matchLoaderExtended = false;
   bool pistonsExtended = false;
 
-  // Blocker (Brain ThreeWire Port A)
-  void blockerToggle() {
+void blockerToggle() {
     blockerExtended = !blockerExtended;
     Blocker.set(blockerExtended);
     Brain.Screen.clearLine(2);
@@ -266,8 +191,7 @@
     Brain.Screen.print("Blocker: %s", blockerExtended ? "EXT" : "CL");
   }
 
-  // MatchLoader (Brain ThreeWire Port B)
-  void matchLoaderToggle() {
+void matchLoaderToggle() {
     matchLoaderExtended = !matchLoaderExtended;
     MatchLoader.set(matchLoaderExtended);
     Brain.Screen.clearLine(4);
@@ -275,8 +199,7 @@
     Brain.Screen.print("MatchLD: %s", matchLoaderExtended ? "EXT" : "CL");
   }
 
-  // Pistons (Brain ThreeWire Port C)
-  void pistonsToggle() {
+void pistonsToggle() {
     pistonsExtended = !pistonsExtended;
     Pistons.set(pistonsExtended);
     Brain.Screen.clearLine(5);
@@ -284,61 +207,63 @@
     Brain.Screen.print("Pistons: %s", pistonsExtended ? "EXT" : "CL");
   }
 
-  // Deadzone
-  const int DEADZONE_THRESHOLD = 10;
+// Auton side selector handlers (Up = RIGHT, Down = LEFT)
+void selectRightAuton() {
+  matchAutonSide = true;
+  Brain.Screen.clearLine(2);
+  Brain.Screen.setCursor(2, 1);
+  Brain.Screen.print("Auton: RIGHT");
+}
 
-  // Simple slew-rate limiter for doubles
-  static double slewTo(double target, double current, double maxDelta) {
-    double diff = target - current;
-    // If current is zero, behave normally
-    if (current == 0.0) {
-      if (std::abs(diff) <= maxDelta) return target;
-      return current + (diff > 0.0 ? maxDelta : -maxDelta);
-    }
+void selectLeftAuton() {
+  matchAutonSide = false;
+  Brain.Screen.clearLine(2);
+  Brain.Screen.setCursor(2, 1);
+  Brain.Screen.print("Auton: LEFT");
+}
 
-    // If current and target are same sign (or target is zero), move toward target
-    if ((current > 0.0 && target >= 0.0) || (current < 0.0 && target <= 0.0)) {
-      if (std::abs(diff) <= maxDelta) return target;
-      return current + (diff > 0.0 ? maxDelta : -maxDelta);
-    }
+const int DEADZONE_THRESHOLD = 10;
 
-    // Target has opposite sign: decelerate toward zero without crossing in one step
-    if (std::abs(current) <= maxDelta) return 0.0;
-    return current + (current > 0.0 ? -maxDelta : maxDelta);
+static double slewTo(double target, double current, double maxDelta) {
+  double diff = target - current;
+  if (current == 0.0) {
+    if (std::abs(diff) <= maxDelta) return target;
+    return current + (diff > 0.0 ? maxDelta : -maxDelta);
   }
 
-  // Runtime-configurable slew delta (percent per control loop iteration)
-  // Reduced to provide smoother acceleration. Tune up if response too sluggish.
-  double slewMaxDelta = 7.50;
+  if ((current > 0.0 && target >= 0.0) || (current < 0.0 && target <= 0.0)) {
+    if (std::abs(diff) <= maxDelta) return target;
+    return current + (diff > 0.0 ? maxDelta : -maxDelta);
+  }
 
-  // Clamp a value to a min/max range (helper for std::clamp compatibility)
-  template<typename T>
-  static T clamp(T value, T minVal, T maxVal) {
+  if (std::abs(current) <= maxDelta) return 0.0;
+  return current + (current > 0.0 ? -maxDelta : maxDelta);
+}
+
+double slewMaxDelta = 7.50;
+
+template<typename T>
+static T clamp(T value, T minVal, T maxVal) {
     if (value > maxVal) return maxVal;
     if (value < minVal) return minVal;
     return value;
-  }
+}
 
-  // Clamp a percent value to the valid [-100,100] range
-  static double clampPercent(double v) {
+static double clampPercent(double v) {
     return clamp(v, -100.0, 100.0);
-  }
+}
 
-  // Apply an exponential input curve to joystick percent values.
-  // exponent >= 1.0. Larger values make low inputs finer and high inputs steeper.
-  static double expoCurve(double inputPercent, double exponent) {
-    double v = clampPercent(inputPercent);
-    double sign = (v >= 0.0) ? 1.0 : -1.0;
-    double absNorm = std::abs(v) / 100.0; // 0..1
-    double shaped = std::pow(absNorm, exponent) * 100.0;
-    return sign * shaped;
-  }
+static double expoCurve(double inputPercent, double exponent) {
+  double v = clampPercent(inputPercent);
+  double sign = (v >= 0.0) ? 1.0 : -1.0;
+  double absNorm = std::abs(v) / 100.0;
+  double shaped = std::pow(absNorm, exponent) * 100.0;
+  return sign * shaped;
+}
 
-  // Global, tunable input exponent (1.0 = linear). Adjust with controller.
-  double INPUT_EXPO = 2.0;
+double INPUT_EXPO = 2.0;
 
-  // Increase/decrease expo (bound and show on brain)
-  void increaseExpo() {
+void increaseExpo() {
     if (INPUT_EXPO < 5.0) INPUT_EXPO = std::round((INPUT_EXPO + 0.1) * 100.0) / 100.0;
     Controller1.Screen.clearLine(3);
     Controller1.Screen.setCursor(3, 1);
@@ -364,44 +289,18 @@
     Brain.Screen.clearLine(3);
     Brain.Screen.setCursor(3, 1);
     Brain.Screen.print("Slew: %.0f", slewMaxDelta);
-  }
+}
 
-  // Turn sensitivity (percent). 100 = normal
-  int turnSensitivity = 60;
-  // Slow-turn sensitivity when Y is held
-  const int slowTurnSensitivity = 25;
+int turnSensitivity = 60;
+const int slowTurnSensitivity = 50;
 
-  // Deceleration step when controller released (percent per loop)
-  // Increased to reduce coasting delay when sticks released.
-
-  // --------------------
-  // PID-BASED DRIVING FUNCTIONS
-  // --------------------
-  // Drive forward/backward to a target distance using PID control
-  // Hybrid approach: Uses ENCODERS for primary distance measurement + DISTANCE SENSOR for validation/correction
-  // This provides more precise and repeatable movements than open-loop driving
-  // Parameters:
-  //   targetDist: Distance to drive in inches (positive=forward, negative=reverse)
-  //   velocity: Max motor velocity in percent (1-100), default 50
-  //   timeout: Max time to attempt movement in milliseconds, default 5000
-  //   useDistanceSensor: If true, uses distance sensor to validate final position (default true)
-  // 
-  // How it works:
-  // 1. Uses encoders as PRIMARY measurement (works at any distance)
-  // 2. When close to target, uses distance sensor to FINE-TUNE final position
-  // 3. Distance sensor prevents wheel slip and encoder drift from causing position error
-  // 4. Stops when within tolerance or timeout reached
-  // 
-  void driveWithPID(double targetDist, int velocity = 50, int timeout = 5000, bool useDistanceSensor = true) {
-    drivePID.reset();
-    drivePID.tolerance = 1.0; // 1 inch tolerance (increased from 0.5)
-    
-    double leftStartPos = leftSide.position(vex::rotationUnits::rev) * 10.2; // inches (3.25" wheel diameter, circumference ~ 10.2 inches)
-    double rightStartPos = rightSide.position(vex::rotationUnits::rev) * 10.2;
-    double distanceSensorStartDist = useDistanceSensor ? DistanceSensor.objectDistance(vex::distanceUnits::in) : 0.0;
-    
+void driveWithPID(double targetDist, int velocity = 100, int timeout = 5000, bool useDistanceSensor = false) {
+  drivePID.reset();
+  drivePID.tolerance = 0.1;
+  
+  double leftStartPos = leftSide.position(vex::rotationUnits::rev) * 10.2;
+  double rightStartPos = rightSide.position(vex::rotationUnits::rev) * 10.2;
     double elapsedTime = 0;
-    bool usingDistanceSensorMode = false;
     
     while (elapsedTime < timeout) {
       double leftCurr = leftSide.position(rev) * 10.2;
@@ -409,39 +308,18 @@
       
       double leftDist = leftCurr - leftStartPos;
       double rightDist = rightCurr - rightStartPos;
-      double avgDist = (leftDist + rightDist) / 2.0;
-      
-      // Primary error calculation from encoders
-      double error = targetDist - avgDist;
-      
-      // If distance sensor available and we're within 6 inches of target, switch to distance sensor for fine-tuning
-      if (useDistanceSensor && !usingDistanceSensorMode && std::abs(error) < 6.0) {
-        // Switch to distance sensor mode for precision final positioning
-        double currentDistSensorReading = DistanceSensor.objectDistance(vex::distanceUnits::in);
-        // Calculate target distance sensor reading based on starting distance and target movement
-        double targetDistSensorReading = distanceSensorStartDist - targetDist;
-        error = targetDistSensorReading - currentDistSensorReading;
-        usingDistanceSensorMode = true;
-      } else if (useDistanceSensor && usingDistanceSensorMode) {
-        // Continue using distance sensor for fine-tuning
-        double currentDistSensorReading = DistanceSensor.objectDistance(vex::distanceUnits::in);
-        double targetDistSensorReading = distanceSensorStartDist - targetDist;
-        error = targetDistSensorReading - currentDistSensorReading;
-      }
-      
-      if (drivePID.atTarget(error)) {
-        leftSide.stop(brake);  // Use brake to stop immediately, not coast
-        rightSide.stop(brake);
+    double avgDist = (leftDist + rightDist) / 2.0;
+    
+    double error = targetDist - avgDist;
+    
+    if (drivePID.atTarget(error)) {
+      leftSide.stop(brake);
+      rightSide.stop(brake);
         break;
-      }
-      
-      double pidOutput = drivePID.calculate(error, 0.01); // 10ms control loop
-      double driveSpeed = clamp(pidOutput, -100.0, 100.0);
-      
-      // Prevent reversing - only move forward when error is positive
-      if (error <= 0.0) {
-        driveSpeed = 0; // Stop if we've reached or passed target
-      }
+    }
+    
+    double pidOutput = drivePID.calculate(error, 0.01);
+    double driveSpeed = clamp(pidOutput, -static_cast<double>(velocity), static_cast<double>(velocity));
       
       leftSide.setVelocity(std::abs(driveSpeed), percent);
       rightSide.setVelocity(std::abs(driveSpeed), percent);
@@ -453,86 +331,28 @@
         leftSide.spin(reverse);
         rightSide.spin(reverse);
       }
-      
-      wait(10, msec);
-      elapsedTime += 10;
+      // Update odometry at 1 ms intervals during auton moves
+      updateOdometry();
+      wait(1, msec);
+      elapsedTime += 1;
     }
     
     leftSide.stop();
     rightSide.stop();
-  }
+}
 
-  // Drive until distance sensor reads a specific distance from an object
-  // Useful for precise positioning relative to walls or game objects
-  // Parameters:
-  //   targetSensorDist: Target distance sensor reading in inches
-  //   velocity: Max motor velocity in percent (1-100)
-  //   timeout: Max time to attempt movement in milliseconds, default 3000
-  //   direction: 1 for forward (toward object), -1 for reverse (away from object)
-  // 
-  void driveToDistanceSensor(double targetSensorDist, int velocity = 30, int timeout = 3000, int direction = 1) {
-    drivePID.reset();
-    drivePID.tolerance = 0.3; // Tighter tolerance for distance sensor
+void turnWithPID(double targetHeading, int timeout = 3000) {
+  turnPID.reset();
+  turnPID.tolerance = 1.0;
     
     double elapsedTime = 0;
     
     while (elapsedTime < timeout) {
-      double currentSensorDist = DistanceSensor.objectDistance(vex::distanceUnits::in);
-      double error = targetSensorDist - currentSensorDist;
-      
-      if (drivePID.atTarget(error)) {
-        leftSide.stop();
-        rightSide.stop();
-        break;
-      }
-      
-      double pidOutput = drivePID.calculate(error, 0.01);
-      double driveSpeed = clamp(pidOutput, -100.0, 100.0) * direction;
-      
-      leftSide.setVelocity(std::abs(driveSpeed), percent);
-      rightSide.setVelocity(std::abs(driveSpeed), percent);
-      
-      if (driveSpeed >= 0) {
-        leftSide.spin(reverse);
-        rightSide.spin(forward);
-      } else {
-        leftSide.spin(forward);
-        rightSide.spin(reverse);
-      }
-      
-      wait(10, msec);
-      elapsedTime += 10;
-    }
+    double currentHeading = inertialSensor.rotation();
+    double error = targetHeading - currentHeading;
     
-    leftSide.stop();
-    rightSide.stop();
-  }
-
-  // Turn to a target heading using PID control
-  // Provides smooth, accurate heading changes with minimal oscillation
-  // Parameters:
-  //   targetHeading: Desired heading in degrees (can be negative)
-  //   timeout: Max time to attempt turn in milliseconds, default 3000
-  // 
-  // How it works:
-  // 1. Reads current heading from IMU
-  // 2. Calculates error (target - current), wraps to shortest path
-  // 3. Uses PID to calculate ideal turn speed
-  // 4. Stops when within tolerance or timeout reached
-  // 
-  void turnWithPID(double targetHeading, int timeout = 3000) {
-    turnPID.reset();
-    turnPID.tolerance = 2.0; // 2 degree tolerance
-    
-    double elapsedTime = 0;
-    
-    while (elapsedTime < timeout) {
-      double currentHeading = inertialSensor.rotation();
-      double error = targetHeading - currentHeading;
-      
-      // Wrap error to shortest path (-180 to 180)
-      if (error > 180) error -= 360;
-      if (error < -180) error += 360;
+    if (error > 180) error -= 360;
+    if (error < -180) error += 360;
       
       if (turnPID.atTarget(error)) {
         leftSide.stop();
@@ -547,232 +367,233 @@
       rightSide.setVelocity(std::abs(turnSpeed), percent);
       
       if (turnSpeed >= 0) {
-        leftSide.spin(reverse);
+        leftSide.spin(forward);
         rightSide.spin(reverse);
       } else {
-        leftSide.spin(forward);
+        leftSide.spin(reverse);
         rightSide.spin(forward);
       }
-      
-      wait(10, msec);
-      elapsedTime += 10;
+      // Update odometry at 1 ms intervals during auton turns
+      updateOdometry();
+      wait(1, msec);
+      elapsedTime += 1;
     }
     
     leftSide.stop();
     rightSide.stop();
-  }
+}
 
-  // Update odometry tracker with current encoder and heading data
-  // Call this regularly (e.g., every 5-10ms) to keep position estimates accurate
-  // Uses encoder positions to calculate distance moved, then updates position based on heading
-  void updateOdometry() {
-    double currentHeading = inertialSensor.rotation();
-    double leftDist = leftSide.position(vex::rotationUnits::rev) * 10.2; // Convert to inches (3.25" wheel)
-    double rightDist = rightSide.position(vex::rotationUnits::rev) * 36.0;
+void updateOdometry() {
+  double currentHeading = inertialSensor.rotation();
+  double leftDist = leftSide.position(vex::rotationUnits::rev) * 10.2;
+  double rightDist = rightSide.position(vex::rotationUnits::rev) * 10.2;
     odometry.update(leftDist, rightDist, currentHeading);
-  }
+}
 
-  // Reset all motor encoders to zero (call at start of autonomous)
-  // Essential for clean distance measurements and preventing accumulated error
-  void resetEncoders() {
-    leftSide.resetPosition();
+void resetEncoders() {
+  leftSide.resetPosition();
     rightSide.resetPosition();
     intakeMotor.resetPosition();
     outputMotor.resetPosition();
-  }
+}
 
-  // --------------------
-  // MODE SELECTOR
-  // --------------------
-  bool skillsMode = false;
-  bool matchAutonSide = false;  // false = Left, true = Right
-  bool autonTestActive = false;
-  // false = Match Autonomous
-  // true  = Skills Autonomous
+bool skillsMode = false;
+bool matchAutonSide = false;
+bool autonTestActive = false;
 
   // --------------------
   // AUTON FUNCTIONS
   // --------------------
-  // Forward declaration for skills autonomous (defined below)
-  void skillsAuton();
+  // Forward declaration for skills autonomous
+void skillsAuton();
 
-  void matchAutonRight() {
-    // Right side match autonomous routine
-    Brain.Screen.clearLine(3);
-    Brain.Screen.setCursor(3, 1);
-    Brain.Screen.print("Match Auton: RIGHT");
-    
-    // Reset encoders and odometry
-    resetEncoders();
-    odometry.reset();
-    drivePID.reset();
-    turnPID.reset();
-    
-    // 1) Drive forward 5 inches with PID
-    driveWithPID(5, 50, 5000, true);
-    wait(1, msec);
-    updateOdometry();
+void matchAutonRight() {
+  calibrateIMU();
+  Brain.Screen.clearLine(3);
+  Brain.Screen.setCursor(3, 1);
+  Brain.Screen.print("Match Auton: RIGHT");
+  
+  resetEncoders();
+  odometry.reset();
+  drivePID.reset();
+  turnPID.reset();
 
-    Controller1.rumble(".-");
+  matchLoaderToggle();
+  
+  intakeMotor.spin(forward);
+  driveWithPID(std::sqrt(2275.0) - IMU_distance);
+  updateOdometry();
+  
+  turnWithPID(20);
+  driveWithPID(5);
+  
+  intakeMotor.spin(forward);
+  matchLoaderToggle();
+  driveWithPID(5);
+  intakeMotor.spin(forward);
+  wait(4000, msec);
+  matchLoaderToggle();
+  
+  driveWithPID(8);
+  turnWithPID(-40);
+  
+  driveWithPID(14);
+  outputMotor.spin(reverse);
+  intakeMotor.spin(reverse);
+  wait(5000, msec);
+  
+  Controller1.rumble(".-");
   }
 
-  void matchAutonLeft() {
-    // Left side match autonomous routine
-    Brain.Screen.clearLine(3);
-    Brain.Screen.setCursor(3, 1);
-    Brain.Screen.print("Match Auton: LEFT");
-    
-    // Reset encoders and odometry
-    resetEncoders();
-    odometry.reset();
-    drivePID.reset();
-    turnPID.reset();
-    
-    // 1) Drive forward 5 inches with PID
-    driveWithPID(50, 50, 5000, true);
-    wait(1, msec);
-    updateOdometry();
+void matchAutonLeft() {
+  Brain.Screen.clearLine(3);
+  Brain.Screen.setCursor(3, 1);
+  Brain.Screen.print("Match Auton: LEFT");
+  
+  resetEncoders();
+  odometry.reset();
+  drivePID.reset();
+  turnPID.reset();
 
-    Controller1.rumble(".-");
+  matchLoaderToggle();
+  
+  intakeMotor.spin(forward);
+  driveWithPID(std::sqrt(2275.0) - IMU_distance);
+  updateOdometry();
+  
+  turnWithPID(-20);
+  driveWithPID(5);
+  
+  intakeMotor.spin(forward);
+  matchLoaderToggle();
+  driveWithPID(5);
+  intakeMotor.spin(forward);
+  wait(3000, msec);
+  matchLoaderToggle();
+  
+  driveWithPID(8);
+  turnWithPID(45);
+  blockerToggle();
+  
+  driveWithPID(14);
+  outputMotor.spin(forward);
+  intakeMotor.spin(forward);
+  wait(5000, msec);
   }
 
-  void skillsAuton() {
-    // Signal start
-    intakeMotor.spin(reverse);
-    Controller1.Screen.clearLine(1);
-    Controller1.Screen.setCursor(1, 1);
-    Controller1.Screen.print("Starting Skills Auton");
-    
-    // Reset encoders for clean distance measurements
-    resetEncoders();
-    
-    // Reset odometry at start
-    odometry.reset();
-    drivePID.reset();
-    turnPID.reset();
-    
-    Drivetrain.setDriveVelocity(50, percent);
-    Drivetrain.setTurnVelocity(25, percent);
-    
-    // 1) Drive forward 25 inches using PID (hybrid: encoder + distance sensor for fine-tune)
-    driveWithPID(25, 50, 5000, true);
-    wait(100, msec);
-    updateOdometry();
+void skillsAuton() {
+  // Starting position: (26.40", 87.60") @ 0°
+  calibrateIMU();
+  resetEncoders();
+  odometry.reset();
+  drivePID.reset();
+  turnPID.reset();
 
-    // 2) Toggle match loader (extend)
-    matchLoaderToggle();
-    wait(100, msec);
+  // Path 1
+  // Waypoint 1: (26.16", 119.52") - Distance: 31.92"
+  turnWithPID(-89.6);
+  driveWithPID(31.92);
+  updateOdometry();
 
-    // 3) Spin intake in reverse for 2500 ms
-    wait(2500, msec);
-    intakeMotor.stop();
+  // Waypoint 2: (4.32", 119.76") - Distance: 21.84"
+  turnWithPID(-0.6);
+  driveWithPID(21.84);
+  updateOdometry();
 
-    // 4) Toggle match loader (retract)
-    matchLoaderToggle();
-    wait(100, msec);
+  // Waypoint 3: (15.36", 119.76") - Distance: 11.04"
+  turnWithPID(180.0);
+  driveWithPID(11.04);
+  updateOdometry();
 
-    // 5) Turn -30 degrees using PID
-    turnWithPID(-30, 3000);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 6) Move forward 17 inches using PID (hybrid approach)
-    driveWithPID(17, 50, 4000, true);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 7) Spin intake forward for 1500 ms
-    intakeMotor.spin(forward);
-    outputMotor.spin(reverse);
-    wait(1500, msec);
-    intakeMotor.stop();
-    
-    // Signal end
-    
-    // 1) Drive reverse 20 inches using PID (hybrid)
-    driveWithPID(-20, 50, 5000, true);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 2) Turn left to -75 degrees using PID
-    turnWithPID(-75, 3000);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 3) Drive forward 50 inches using PID (hybrid)
-    driveWithPID(50, 50, 6000, true);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 4) Toggle match loader
-    matchLoaderToggle();
-    wait(100, msec);
-    
-    // 5) Spin intake reverse for 1500 ms
-    intakeMotor.spin(reverse);
-    wait(1500, msec);
-    intakeMotor.stop();
-    
-    // 6) Toggle match loader
-    matchLoaderToggle();
-    wait(100, msec);
-    
-    // 8) Turn right to -25 degrees using PID
-    turnWithPID(-25, 3000);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 9) Drive forward 7 inches using PID (hybrid) - fine positioning
-    driveWithPID(7, 50, 3000, true);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 10) Toggle blocker
-    blockerToggle();
-    wait(100, msec);
-    
-    // 11) Run both intake and output for 2500 ms
-    intakeMotor.spin(forward);
-    outputMotor.spin(forward);
-    wait(2500, msec);
-    intakeMotor.stop();
-    outputMotor.stop();
-    
-    // 12) Drive reverse 20 inches using PID (hybrid)
-    driveWithPID(-20, 50, 5000, true);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 13) Turn left 60 degrees (heading = -85)
-    turnWithPID(-85, 3000);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 14) Drive reverse 10 inches using PID (hybrid)
-    driveWithPID(-10, 50, 3500, true);
-    wait(100, msec);
-    updateOdometry();
+  // Waypoint 4: (26.88", 131.76") - Distance: 16.63"
+  turnWithPID(-133.8);
+  driveWithPID(16.63);
+  updateOdometry();
 
-    // 15) Turn left 90 degrees (heading = -175)
-    turnWithPID(-175, 3000);
-    wait(100, msec);
-    updateOdometry();
-    
-    // 16) Drive reverse 5 inches using PID (hybrid)
-    driveWithPID(-5, 50, 2500, true);
-    wait(100, msec);
-    updateOdometry();
+  // Waypoint 5: (117.36", 132.00") - Distance: 90.48"
+  turnWithPID(-179.8);
+  driveWithPID(90.48);
+  updateOdometry();
 
-    // Stop all motors before ending autonomous
-    intakeMotor.stop();
-    outputMotor.stop();
-    leftSide.stop();
-    rightSide.stop();
+  // Waypoint 6: (117.36", 119.76") - Distance: 12.24"
+  turnWithPID(90.0);
+  driveWithPID(12.24);
+  updateOdometry();
 
-    Controller1.rumble(".-");
-  }
+  // Waypoint 7: (98.88", 119.76") - Distance: 18.48"
+  turnWithPID(0.0);
+  driveWithPID(18.48);
+  updateOdometry();
 
-  // --------------------
+  // Waypoint 8: (140.64", 120.00") - Distance: 41.76"
+  turnWithPID(-179.7);
+  driveWithPID(41.76);
+  updateOdometry();
+
+  // Waypoint 9: (117.36", 120.00") - Distance: 23.28"
+  turnWithPID(0.0);
+  driveWithPID(23.28);
+  updateOdometry();
+
+  // Waypoint 10: (117.60", 27.12") - Distance: 92.88"
+  turnWithPID(90.1);
+  driveWithPID(92.88);
+  updateOdometry();
+
+  // Waypoint 11: (136.56", 27.12") - Distance: 18.96"
+  turnWithPID(180.0);
+  driveWithPID(18.96);
+  updateOdometry();
+
+  // Waypoint 12: (127.68", 27.12") - Distance: 8.88"
+  turnWithPID(0.0);
+  driveWithPID(8.88);
+  updateOdometry();
+
+  // Waypoint 13: (117.12", 16.32") - Distance: 15.10"
+  turnWithPID(45.6);
+  driveWithPID(15.10);
+  updateOdometry();
+
+  // Waypoint 14: (26.88", 16.32") - Distance: 90.24"
+  turnWithPID(0.0);
+  driveWithPID(90.24);
+  updateOdometry();
+
+  // Waypoint 15: (26.88", 27.60") - Distance: 11.28"
+  turnWithPID(-90.0);
+  driveWithPID(11.28);
+  updateOdometry();
+
+  // Waypoint 16: (43.44", 27.60") - Distance: 16.56"
+  turnWithPID(180.0);
+  driveWithPID(16.56);
+  updateOdometry();
+
+  // Waypoint 17: (8.40", 27.84") - Distance: 35.04"
+  turnWithPID(-0.4);
+  driveWithPID(35.04);
+  updateOdometry();
+
+  // Waypoint 18: (43.44", 27.60") - Distance: 35.04"
+  turnWithPID(179.6);
+  driveWithPID(35.04);
+  updateOdometry();
+
+  // Waypoint 19: (7.92", 48.00") - Distance: 40.96"
+  turnWithPID(-29.9);
+  driveWithPID(40.96);
+  updateOdometry();
+
+  // Waypoint 20: (7.92", 78.72") - Distance: 30.72"
+  turnWithPID(-90.0);
+  driveWithPID(30.72);
+  updateOdometry();
+
+  Controller1.rumble(".−");
+}
+
+// --------------------
   // PRE-AUTON
   // --------------------
   void calibrateIMU() {
@@ -790,25 +611,24 @@
     wait(20, msec);
   }
 
-  void pre_auton(void) {
-    // Show mode selection on the Brain
-    Brain.Screen.clearScreen();
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("Mode: %s", skillsMode ? "SKILLS" : "MATCH");
+void pre_auton(void) {
+  // Force default to LEFT auton at startup
+  matchAutonSide = false;
+  Brain.Screen.clearScreen();
+  Brain.Screen.setCursor(1, 1);
+  Brain.Screen.print("Mode: %s", skillsMode ? "SKILLS" : "MATCH");
+  Brain.Screen.setCursor(2, 1);
+  Brain.Screen.print("Auton: %s", matchAutonSide ? "RIGHT" : "LEFT");
 
-    // Set default stopping modes and bind controller callbacks
-    // Use coast so robot rolls down naturally in deadzone
-    leftSide.setStopping(vex::brakeType::coast);
-    rightSide.setStopping(vex::brakeType::coast);
-    intakeMotor.setStopping(vex::brakeType::brake);
-    outputMotor.setStopping(vex::brakeType::brake);
+  leftSide.setStopping(vex::brakeType::coast);
+  rightSide.setStopping(vex::brakeType::coast);
+  intakeMotor.setStopping(vex::brakeType::brake);
+  outputMotor.setStopping(vex::brakeType::brake);
 
-    // Set sane default velocities for intake/output
-    intakeMotor.setVelocity(100, percent);
-    outputMotor.setVelocity(100, percent);
+  intakeMotor.setVelocity(100, percent);
+  outputMotor.setVelocity(100, percent);
 
-    // Calibrate inertial sensor (may take a second)
-    calibrateIMU();
+  calibrateIMU();
 
     Controller1.ButtonR1.pressed(intakeReversePressed);
     Controller1.ButtonR1.released(intakeReverseReleased);
@@ -818,43 +638,36 @@
     Controller1.ButtonL1.pressed(outputForwardPressed);
     Controller1.ButtonL1.released(outputForwardReleased);
     Controller1.ButtonL2.pressed(outputReversePressed);
-    Controller1.ButtonL2.released(outputReverseReleased);
+  Controller1.ButtonL2.released(outputReverseReleased);
 
-    // Pneumatics callbacks
-    Controller1.ButtonA.pressed(blockerToggle);
+  Controller1.ButtonA.pressed(blockerToggle);
     Controller1.ButtonB.pressed(matchLoaderToggle);
     Controller1.ButtonX.pressed(pistonsToggle);
-    Controller1.ButtonUp.pressed(increaseExpo);
-    Controller1.ButtonDown.pressed(decreaseExpo);
-  }
+    Controller1.ButtonUp.pressed(selectRightAuton);
+    Controller1.ButtonDown.pressed(selectLeftAuton);
+}
 
-  // --------------------
-  // AUTONOMOUS
-  // --------------------
-  void autonomous(void) {
-    // Ensure IMU is calibrated before autonomous
-    calibrateIMU();
+void autonomous(void) {
+  calibrateIMU();
     if (skillsMode) skillsAuton();
     else if (matchAutonSide) matchAutonRight();
     else matchAutonLeft();
-  }
+}
 
-  // --------------------
-  // DRIVER CONTROL
-  // --------------------
-  void usercontrol(void) {
+void usercontrol(void) {
 
-    calibrateIMU();
-    odometry.reset(); // Reset odometry at start of driver control
+  // IMU already calibrated in pre_auton, no need to recalibrate
+  odometry.reset();
 
     double currentLeft = 0.0;
     double currentRight = 0.0;
+    double currentDrive = 0.0;
+    int lastTelemetryMs = Brain.timer(msec);
 
     
-    while (1) {
-      Controller1.Screen.print(DistanceSensor.objectDistance(inches));
-      // TOGGLE AUTON MODE USING “LEFT” BUTTON
-      if (Controller1.ButtonLeft.pressing()) {
+  while (1) {
+    // Distance sensor removed; no longer printing its readings
+    if (Controller1.ButtonLeft.pressing()) {
         skillsMode = !skillsMode;
         Brain.Screen.clearScreen();
         Brain.Screen.setCursor(1, 1);
@@ -865,72 +678,62 @@
       int drivePower = Controller1.Axis3.position(percent);
       int turnPower = Controller1.Axis1.position(percent);
 
-      if (std::abs(drivePower) < DEADZONE_THRESHOLD) drivePower = 0;
-      if (std::abs(turnPower) < DEADZONE_THRESHOLD) turnPower = 0;
+    if (std::abs(drivePower) < DEADZONE_THRESHOLD) drivePower = 0;
+    if (std::abs(turnPower) < DEADZONE_THRESHOLD) turnPower = 0;
 
-      // Scale turning sensitivity (use Y to enable slow-turn)
-      int activeTurnSens = Controller1.ButtonY.pressing() ? slowTurnSensitivity : turnSensitivity;
-      int scaledTurn = (turnPower * activeTurnSens) / 100;
+    int activeTurnSens = Controller1.ButtonY.pressing() ? slowTurnSensitivity : turnSensitivity;
+    int scaledTurn = (turnPower * activeTurnSens) / 100;
 
-      int leftOutput = drivePower + scaledTurn;
-      int rightOutput = drivePower - scaledTurn;
+      // Apply expo separately to drive and turn
+      double targetDrive = expoCurve((double)drivePower, INPUT_EXPO);
+      double targetTurn = expoCurve((double)scaledTurn, INPUT_EXPO);
 
-      // Apply exponential input curve for smoother low-end response
-      double targetLeft = expoCurve((double)leftOutput, INPUT_EXPO);
-      double targetRight = expoCurve((double)rightOutput, INPUT_EXPO);
+      // Direct response - no slew limiting for instant control
+      currentDrive = targetDrive;
 
-      // Apply slew rate limiting for smooth acceleration/deceleration
-      currentLeft = slewTo(targetLeft, currentLeft, slewMaxDelta);
-      currentRight = slewTo(targetRight, currentRight, slewMaxDelta);
+      // Compose final motor targets for instant response
+      double targetLeft = clampPercent(currentDrive + targetTurn);
+      double targetRight = clampPercent(currentDrive - targetTurn);
 
-      // Set velocities with slewed values
-      leftSide.setVelocity(std::abs(currentLeft), percent);
-      rightSide.setVelocity(std::abs(currentRight), percent);
+      currentLeft = targetLeft;
+      currentRight = targetRight;
 
-      // Only spin if not zero, otherwise coast
-      if (std::abs(currentLeft) < 0.5 && std::abs(currentRight) < 0.5) {
+    leftSide.setVelocity(std::abs(currentLeft), percent);
+    rightSide.setVelocity(std::abs(currentRight), percent);
+    
+    if (std::abs(currentLeft) < 0.5 && std::abs(currentRight) < 0.5) {
         leftSide.stop(coast);
         rightSide.stop(coast);
       } else {
         leftSide.spin(currentLeft >= 0.0 ? forward : reverse);
         rightSide.spin(currentRight >= 0.0 ? forward : reverse);
-      }
+    }
 
-      // Update odometry
-      updateOdometry();
-
-      // Telemetry for debugging turning behavior
-      Brain.Screen.clearLine(5);
+    int nowMs = Brain.timer(msec);
+    if (nowMs - lastTelemetryMs >= 100) {
+      lastTelemetryMs = nowMs;
+      updateOdometry();  // Only update odometry every 100ms to avoid lag
       Brain.Screen.setCursor(5, 1);
-      Brain.Screen.print("T:%d L:%.1f R:%.1f", scaledTurn, currentLeft, currentRight);
+      Brain.Screen.print("T:%d L:%.1f R:%.1f   ", scaledTurn, currentLeft, currentRight);
 
-      // Show distance sensor (inches) and IMU heading (degrees)
-      double dist_in = DistanceSensor.objectDistance(vex::distanceUnits::in);
       double raw_heading = inertialSensor.heading();
       double heading_deg = fmod(raw_heading, 360.0);
       if (heading_deg < 0) heading_deg += 360.0;
-      Brain.Screen.clearLine(6);
       Brain.Screen.setCursor(6, 1);
-      Brain.Screen.print("Dist: %.1f in  H: %.1f deg", dist_in, heading_deg);
+      Brain.Screen.print("H: %.1f deg         ", heading_deg);
 
-      // Display odometry information
-      Brain.Screen.clearLine(7);
       Brain.Screen.setCursor(7, 1);
-      Brain.Screen.print("X:%.1f Y:%.1f HDG:%.1f", odometry.x, odometry.y, odometry.heading);
-
-      wait(0, msec);
+      Brain.Screen.print("X:%.1f Y:%.1f HDG:%.1f   ", odometry.x, odometry.y, odometry.heading);
     }
 
-    }
-
-  // --------------------
-  // MAIN
-  // --------------------
-  int main() {
-    // Run pre-auton initialization first (calibration, bindings)
-    pre_auton();
-
-    // Register competition callbacks
-    Competition.autonomous(autonomous);
-    Competition.drivercontrol(usercontrol);
+      wait(5, msec);
   }
+
+}
+
+int main() {
+  pre_auton();
+
+  Competition.autonomous(autonomous);
+  Competition.drivercontrol(usercontrol);
+}

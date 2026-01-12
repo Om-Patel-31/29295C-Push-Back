@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VEX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --square-width: 100px;
+            --square-height: 100px;
+            --robot-heading: 0deg;
+            --robot-x: 50%;
+            --robot-y: 50%;
+            --px-per-ft: 50;
+            --bg: #0b1017;
+            --panel: #0f1724;
+            --muted: #7c869a;
+            --border: #1f2a3d;
+            --accent: #3cbf8a;
+            --accent-strong: #27a06f;
+            --card: #121c2b;
+            --text: #e5ecf5;
+            --danger: #f15b5b;
+        }
+        body {
+            background: radial-gradient(circle at 20% 20%, rgba(60, 191, 138, 0.08), transparent 25%),
+                        radial-gradient(circle at 80% 0%, rgba(124, 134, 154, 0.08), transparent 20%),
+                        var(--bg);
+            color: var(--text);
+            font-family: 'Manrope', 'Segoe UI', sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+        .app-shell {
+            width: 100%;
+            max-width: 1440px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .masthead {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+        .brand {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .badge {
+            padding: 6px 10px;
+            background: rgba(60, 191, 138, 0.1);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+        .control-slab {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            align-items: end;
+        }
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .field-group label {
+            font-size: 12px;
+            color: var(--muted);
+            letter-spacing: 0.2px;
+        }
+        .field-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            font-weight: 600;
+            outline: none;
+            transition: border 0.15s ease, background 0.15s ease;
+        }
+        .field-group input:focus {
+            border-color: var(--accent);
+            background: #0f1a28;
+        }
+        .button-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        button {
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+            color: #05140e;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.15s ease;
+        }
+        button:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(60, 191, 138, 0.25); }
+        button:active { transform: translateY(0); }
+        button.secondary {
+            background: var(--card);
+            color: var(--text);
+            border-color: var(--border);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+        }
+        button.secondary:hover { border-color: var(--accent); }
+        button.danger {
+            background: linear-gradient(135deg, #f77676, var(--danger));
+            color: #2b0b0b;
+            border-color: #f77676;
+        }
+        .file-button {
+            display: block;
+            text-align: center;
+            cursor: pointer;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            font-weight: 700;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+        }
+        .file-button:hover { border-color: var(--accent); }
+        .file-button input { display: none; }
+        .workspace {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 16px;
+        }
+        .canvas-wrap {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+        #match_field {
+            position: relative;
+            width: 600px;
+            height: 600px;
+            background-image: url('./vex_skills_field.jpg');
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+        #path-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+            z-index: 1;
+        }
+        .waypoint-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        .waypoint {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(60, 191, 138, 0.9);
+            border-radius: 50%;
+            background: rgba(60, 191, 138, 0.3);
+            cursor: grab;
+            transform: translate(-50%, -50%);
+            user-select: none;
+            transition: transform 0.1s ease, box-shadow 0.15s ease;
+        }
+        .waypoint:hover { transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 0 12px rgba(60, 191, 138, 0.8); }
+        .waypoint.dragging {
+            background: rgba(255, 174, 94, 0.9);
+            border-color: rgba(255, 174, 94, 1);
+            cursor: grabbing;
+        }
+        .robot {
+            position: absolute;
+            width: var(--square-width);
+            height: var(--square-height);
+            left: var(--robot-x);
+            top: var(--robot-y);
+            transform: translate(-50%, -50%);
+            z-index: 2;
+        }
+        .robot-container { position: relative; width: 100%; height: 100%; pointer-events: auto; }
+        .robot-body {
+            width: 100%;
+            height: 100%;
+            border: 3px solid rgba(60, 191, 138, 0.9);
+            background: rgba(60, 191, 138, 0.08);
+            position: relative;
+            box-sizing: border-box;
+            transform: rotate(var(--robot-heading));
+            border-radius: 6px;
+        }
+        .robot-front-arrow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 18px;
+            height: 26px;
+            transform: translate(-50%, -50%);
+            cursor: grab;
+        }
+        .robot-front-arrow::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-left: 9px solid transparent;
+            border-right: 9px solid transparent;
+            border-bottom: 12px solid rgba(255, 174, 94, 0.95);
+            transform: translateX(-50%);
+        }
+        .robot-front-arrow::after {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            width: 5px;
+            height: 16px;
+            background: rgba(255, 174, 94, 0.95);
+            transform: translateX(-50%);
+        }
+        .robot-front-arrow:active { cursor: grabbing; }
+        .data-display {
+            margin-top: 12px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+            font-family: monospace;
+            color: var(--muted);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+        }
+        .waypoints-panel {
+            position: sticky;
+            top: 24px;
+            align-self: start;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+        .waypoints-panel h3 {
+            margin: 0;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            color: var(--muted);
+            letter-spacing: 0.2px;
+        }
+        .path-section {
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+        }
+        .path-section:last-child { border-bottom: none; }
+        .path-header {
+            padding: 12px 14px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.15s ease, border 0.15s ease;
+        }
+        .path-header.highlighted {
+            background: rgba(60, 191, 138, 0.12);
+            border-left: 3px solid var(--accent);
+        }
+        .path-header:hover { background: #141f2f; }
+        .path-header-left { display: flex; align-items: center; gap: 10px; flex: 1; }
+        .path-header-controls { display: flex; gap: 8px; align-items: center; }
+        .path-header-controls button { padding: 8px 10px; font-size: 11px; }
+        .path-header-controls button.delete { background: linear-gradient(135deg, #ff8f8f, #f15b5b); color: #2b0b0b; border-color: #ff8f8f; }
+        .path-title { color: var(--text); font-weight: 700; font-size: 14px; }
+        .path-toggle { color: var(--muted); transition: transform 0.2s ease; }
+        .path-toggle.expanded { transform: rotate(90deg); }
+        .path-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        .path-content.expanded { max-height: 2000px; }
+        .waypoint-item {
+            background: var(--card);
+            padding: 10px;
+            margin: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 11px;
+            word-break: break-word;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .waypoint-item:hover { border-color: var(--accent); }
+        .waypoint-item.highlighted {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(60, 191, 138, 0.4);
+        }
+        .waypoint-item-controls { margin-top: 8px; display: flex; gap: 6px; }
+        .waypoint-item-controls button { padding: 6px 8px; font-size: 10px; }
+        .waypoint-item-controls button.delete { background: linear-gradient(135deg, #ff8f8f, #f15b5b); color: #2b0b0b; border-color: #ff8f8f; }
+        .waypoint.highlighted { border-color: rgba(255, 200, 0, 1); background: rgba(255, 200, 0, 0.5); box-shadow: 0 0 15px rgba(255, 200, 0, 0.8); }
+        .waypoint-item-number { color: var(--accent); font-weight: 700; margin-bottom: 5px; }
+        .waypoint-item-angle { color: rgba(255, 174, 94, 0.9); margin-top: 5px; font-size: 10px; }
+        @media (max-width: 1100px) { .workspace { grid-template-columns: 1fr; } #match_field { max-width: 100%; } }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <div class="masthead">
+            <div class="brand">VEX Path Studio</div>
+            <div class="badge">Beta</div>
+        </div>
+
+        <div class="control-slab">
+            <div class="controls">
+                <div class="field-group">
+                    <label>X (in)</label>
+                    <input type="number" id="x-input-ft" value="27.7" step="1" min="0" max="144">
+                </div>
+                <div class="field-group">
+                    <label>Y (in)</label>
+                    <input type="number" id="y-input-ft" value="88.5" step="1" min="0" max="144">
+                </div>
+                <div class="field-group">
+                    <label>Heading (°)</label>
+                    <input type="number" id="heading-input" value="0" min="0" max="360" step="1">
+                </div>
+                <div class="field-group">
+                    <label>Width (in)</label>
+                    <input type="number" id="size-width-in" value="15" step="0.5" min="5" max="48">
+                </div>
+                <div class="field-group">
+                    <label>Height (in)</label>
+                    <input type="number" id="size-height-in" value="15" step="0.5" min="5" max="48">
+                </div>
+                <div class="field-group">
+                    <label>Speed (in/s)</label>
+                    <input type="number" id="speed-input-ft" value="10" step="0.5" min="3" max="120">
+                </div>
+                <div class="field-group" style="align-self: center;">
+                    <label style="display: flex; gap: 8px; align-items: center; color: var(--text); font-weight: 600;">
+                        <input type="checkbox" id="show-waypoints" checked> Show waypoints
+                    </label>
+                </div>
+            </div>
+            <div class="button-row" style="margin-top: 12px;">
+                <button onclick="updateRobot()">Update Robot</button>
+                <button id="draw-btn" onclick="toggleDrawMode()">Draw Path</button>
+                <button class="secondary" onclick="newPath()">New Path</button>
+                <button class="danger" onclick="clearPath()">Clear Current</button>
+            </div>
+            <div class="button-row" style="margin-top: 10px;">
+                <button class="secondary" onclick="exportData()">Export</button>
+                <label class="file-button secondary" for="file-upload">Import
+                    <input type="file" id="file-upload" accept=".json" onchange="importData(event)">
+                </label>
+                <button onclick="generateCppCode()">Generate C++ Code</button>
+                <button onclick="startRun()">Run</button>
+                <button class="secondary" onclick="pauseRun()">Pause</button>
+                <button class="secondary" onclick="resetRun()">Reset</button>
+            </div>
+        </div>
+
+        <div class="workspace">
+            <div class="canvas-wrap">
+                <div id="match_field">
+                    <canvas id="path-canvas" width="600" height="600"></canvas>
+                    <div class="waypoint-overlay" id="waypoint-overlay"></div>
+                    <div class="robot">
+                        <div class="robot-container">
+                            <div class="robot-body">
+                                <div class="robot-front-arrow" id="front-arrow"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="data-display">
+                    <div id="data-output">Robot: (26.40 in, 87.60 in) @ 90° | Size: 12.00 x 12.00 in | Waypoints: 0</div>
+                </div>
+            </div>
+
+            <div class="waypoints-panel" id="waypoints-panel">
+                <h3>Paths</h3>
+                <div id="paths-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const field = document.getElementById('match_field');
+        const canvas = document.getElementById('path-canvas');
+        const ctx = canvas.getContext('2d');
+        const waypointOverlay = document.getElementById('waypoint-overlay');
+        const PX_PER_FT = 50;
+        const PX_PER_IN = PX_PER_FT / 12;
+        const HEADING_ZERO_OFFSET = 180; // input 0° = visual left (standard 180°)
+        
+        let isDrawingPath = false;
+        let pathPoints = [];
+        let savedPaths = [];
+        let robotHistory = [];
+        let arrowDragging = false;
+        let draggingWaypoint = null;
+        let highlightedWaypoint = null;
+        let highlightedPath = null;
+        let lastRobotPos = { x: 300, y: 300, heading: 0 };
+
+        function pxToIn(px) { return (px / PX_PER_IN).toFixed(2); }
+        function inToPx(inches) { return inches * PX_PER_IN; }
+        function ftToPx(ft) { return ft * PX_PER_FT; } // legacy support
+
+        function updateRobot() {
+            const xIn = parseFloat(document.getElementById('x-input-ft').value);
+            const yIn = parseFloat(document.getElementById('y-input-ft').value);
+            const heading = parseFloat(document.getElementById('heading-input').value);
+            const sizeWIn = parseFloat(document.getElementById('size-width-in').value);
+            const sizeHIn = parseFloat(document.getElementById('size-height-in').value);
+
+            const x = inToPx(xIn);
+            const y = inToPx(yIn);
+            const sizeW = inToPx(sizeWIn);
+            const sizeH = inToPx(sizeHIn);
+
+            document.documentElement.style.setProperty('--robot-x', x + 'px');
+            document.documentElement.style.setProperty('--robot-y', y + 'px');
+            const cssHeading = (heading + HEADING_ZERO_OFFSET) % 360;
+            document.documentElement.style.setProperty('--robot-heading', cssHeading + 'deg');
+            document.documentElement.style.setProperty('--square-width', sizeW + 'px');
+            document.documentElement.style.setProperty('--square-height', sizeH + 'px');
+
+            lastRobotPos = { x, y, heading };
+
+            // Store in history
+            const entry = { x: xIn, y: yIn, heading, sizeW: sizeWIn, sizeH: sizeHIn };
+            robotHistory.push(entry);
+            updateDataDisplay();
+        }
+
+        function updateDataDisplay() {
+            const hist = robotHistory[robotHistory.length - 1];
+            if (!hist) return;
+            const sizeLabel = hist.sizeW && hist.sizeH ? `${hist.sizeW} x ${hist.sizeH}` : (hist.size ? `${hist.size} x ${hist.size}` : 'n/a');
+            const summary = `Robot: (${hist.x} in, ${hist.y} in) @ ${hist.heading}° | Size: ${sizeLabel} in | Current path: ${pathPoints.length} waypoints | Saved paths: ${savedPaths.length}`;
+            const data = {
+                currentPath: pathPoints,
+                savedPaths
+            };
+            document.getElementById('data-output').textContent = `${summary}\n${JSON.stringify(data, null, 2)}`;
+        }
+
+        function renderWaypoints() {
+            waypointOverlay.innerHTML = '';
+            if (document.getElementById('show-waypoints').checked) {
+                pathPoints.forEach((p, idx) => {
+                    const div = document.createElement('div');
+                    div.className = 'waypoint';
+                    if (highlightedWaypoint === idx) {
+                        div.classList.add('highlighted');
+                    }
+                    div.style.left = p.x + 'px';
+                    div.style.top = p.y + 'px';
+                    div.dataset.index = idx;
+                    div.onmousedown = (e) => startDragWaypoint(e, idx);
+                    div.oncontextmenu = (e) => { e.preventDefault(); removeWaypoint(idx); };
+                    waypointOverlay.appendChild(div);
+                });
+            }
+
+            updateWaypointsPanel();
+        }
+
+        function highlightWaypoint(idx) {
+            highlightedWaypoint = highlightedWaypoint === idx ? null : idx;
+            highlightedPath = null;
+            renderWaypoints();
+            redrawPath();
+        }
+
+        function highlightPath(type, index = null) {
+            const isSame = highlightedPath && highlightedPath.type === type && highlightedPath.index === index;
+            highlightedPath = isSame ? null : { type, index };
+            highlightedWaypoint = null;
+            renderWaypoints();
+            redrawPath();
+        }
+
+        function deletePath(type, index = null) {
+            if (type === 'saved') {
+                savedPaths.splice(index, 1);
+            } else {
+                pathPoints = [];
+            }
+            highlightedWaypoint = null;
+            highlightedPath = null;
+            redrawPath();
+            renderWaypoints();
+            updateDataDisplay();
+        }
+
+        function deleteWaypoint(idx) {
+            pathPoints.splice(idx, 1);
+            if (highlightedWaypoint === idx) {
+                highlightedWaypoint = null;
+            } else if (highlightedWaypoint > idx) {
+                highlightedWaypoint--;
+            }
+            redrawPath();
+            renderWaypoints();
+            updateDataDisplay();
+        }
+
+        function updateWaypointsPanel() {
+            const container = document.getElementById('paths-container');
+            container.innerHTML = '';
+
+            if (savedPaths.length === 0 && pathPoints.length === 0) {
+                container.innerHTML = '<div style="color: #888; padding: 10px;">No paths yet. Draw a path to get started.</div>';
+                return;
+            }
+
+            const segmentLengthIn = (a, b) => (Math.hypot(a.x - b.x, a.y - b.y) / PX_PER_IN).toFixed(2);
+
+            // Saved paths (older paths)
+            savedPaths.forEach((path, idx) => {
+                const pathSection = document.createElement('div');
+                pathSection.className = 'path-section';
+
+                const pathHeader = document.createElement('div');
+                pathHeader.className = 'path-header';
+                if (highlightedPath && highlightedPath.type === 'saved' && highlightedPath.index === idx) {
+                    pathHeader.classList.add('highlighted');
+                }
+                pathHeader.innerHTML = `
+                    <div class="path-header-left">
+                        <span class="path-toggle">▶</span>
+                        <span class="path-title">Path ${idx + 1} (${path.points.length} waypoints)</span>
+                    </div>
+                    <div class="path-header-controls">
+                        <button onclick="event.stopPropagation(); highlightPath('saved', ${idx});">Highlight</button>
+                        <button class="delete" onclick="event.stopPropagation(); deletePath('saved', ${idx});">Delete</button>
+                    </div>
+                `;
+
+                const pathContent = document.createElement('div');
+                pathContent.className = 'path-content';
+                const summary = document.createElement('div');
+                summary.style.padding = '10px';
+                const startIn = path.start ? { x: pxToIn(path.start.x), y: pxToIn(path.start.y) } : null;
+                let totalLen = 0;
+                if (path.points.length > 0) {
+                    let prev = path.start || lastRobotPos;
+                    path.points.forEach(pt => {
+                        totalLen += parseFloat(segmentLengthIn(pt, prev));
+                        prev = pt;
+                    });
+                }
+                summary.innerHTML = `Waypoints: ${path.points.length}`
+                    + (startIn ? `<br>Start: (${startIn.x} in, ${startIn.y} in)` : '')
+                    + `<br>Total length: ${totalLen.toFixed(2)} in`;
+                pathContent.appendChild(summary);
+
+                pathSection.appendChild(pathHeader);
+                pathSection.appendChild(pathContent);
+                container.appendChild(pathSection);
+
+                pathHeader.onclick = () => {
+                    const toggle = pathHeader.querySelector('.path-toggle');
+                    toggle.classList.toggle('expanded');
+                    pathContent.classList.toggle('expanded');
+                };
+            });
+
+            // Current path (editable)
+            const currentSection = document.createElement('div');
+            currentSection.className = 'path-section';
+
+            const currentHeader = document.createElement('div');
+            currentHeader.className = 'path-header';
+            if (highlightedPath && highlightedPath.type === 'current') {
+                currentHeader.classList.add('highlighted');
+            }
+            currentHeader.innerHTML = `
+                <div class="path-header-left">
+                    <span class="path-toggle expanded">▶</span>
+                    <span class="path-title">Current Path (${pathPoints.length} waypoints)</span>
+                </div>
+                <div class="path-header-controls">
+                    <button onclick="event.stopPropagation(); highlightPath('current');">Highlight</button>
+                    <button class="delete" onclick="event.stopPropagation(); deletePath('current');">Delete</button>
+                </div>
+            `;
+
+            const currentContent = document.createElement('div');
+            currentContent.className = 'path-content expanded';
+
+            const waypointsList = document.createElement('div');
+            waypointsList.id = 'waypoints-list';
+
+            if (pathPoints.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.padding = '10px';
+                empty.style.color = '#888';
+                empty.textContent = 'No waypoints yet.';
+                waypointsList.appendChild(empty);
+            }
+
+            let runningLen = 0;
+            pathPoints.forEach((p, idx) => {
+                const prev = idx === 0 ? lastRobotPos : pathPoints[idx - 1];
+                const dx = p.x - prev.x;
+                const dy = p.y - prev.y;
+                let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                angle = (angle + 360) % 360;
+                const displayAngle = ((angle - 180 + 360) % 360);
+                const normalizedAngle = displayAngle > 180 ? displayAngle - 360 : displayAngle;
+                const segLen = parseFloat(segmentLengthIn(p, prev));
+                runningLen += segLen;
+
+                const item = document.createElement('div');
+                item.className = 'waypoint-item';
+                if (highlightedWaypoint === idx) {
+                    item.classList.add('highlighted');
+                }
+                item.innerHTML = `
+                    <div class="waypoint-item-number">#${idx + 1}</div>
+                    <div>Segment: ${segLen.toFixed(2)} in</div>
+                    <div>Total to here: ${runningLen.toFixed(2)} in</div>
+                    <div class="waypoint-item-angle">→ Angle: ${Math.round(normalizedAngle)}°</div>
+                    <div class="waypoint-item-controls">
+                        <button onclick="highlightWaypoint(${idx})">Highlight</button>
+                        <button class="delete" onclick="deleteWaypoint(${idx})">Delete</button>
+                    </div>
+                `;
+                waypointsList.appendChild(item);
+            });
+
+            currentContent.appendChild(waypointsList);
+            currentSection.appendChild(currentHeader);
+            currentSection.appendChild(currentContent);
+            container.appendChild(currentSection);
+
+            currentHeader.onclick = () => {
+                const toggle = currentHeader.querySelector('.path-toggle');
+                toggle.classList.toggle('expanded');
+                currentContent.classList.toggle('expanded');
+            };
+        }
+
+        function toggleWaypointsPanel() {
+            document.getElementById('waypoints-panel').classList.toggle('open');
+        }
+
+        function startDragWaypoint(e, idx) {
+            draggingWaypoint = idx;
+            const waypoint = e.target;
+            waypoint.classList.add('dragging');
+            e.stopPropagation();
+        }
+
+        function removeWaypoint(idx) {
+            pathPoints.splice(idx, 1);
+            redrawPath();
+            renderWaypoints();
+            updateDataDisplay();
+        }
+
+        function redrawPath() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const drawSegments = (startPoint, points, meta) => {
+                if (!points || points.length === 0) return;
+                ctx.lineWidth = 3;
+                const highlightColor = 'rgba(255, 200, 0, 1)';
+                const baseColor = meta.type === 'saved' ? 'rgba(150, 150, 150, 0.6)' : 'rgba(100, 200, 255, 0.9)';
+                const isHighlightedPath = highlightedPath && highlightedPath.type === meta.type && highlightedPath.index === meta.index;
+
+                const getStrokeColor = (idx) => {
+                    if (meta.type === 'current' && highlightedWaypoint === idx) return highlightColor;
+                    if (isHighlightedPath) return highlightColor;
+                    return baseColor;
+                };
+
+                ctx.strokeStyle = getStrokeColor(0);
+                ctx.beginPath();
+                ctx.moveTo(startPoint.x, startPoint.y);
+                ctx.lineTo(points[0].x, points[0].y);
+                ctx.stroke();
+
+                for (let i = 1; i < points.length; i++) {
+                    ctx.strokeStyle = getStrokeColor(i);
+                    ctx.beginPath();
+                    ctx.moveTo(points[i - 1].x, points[i - 1].y);
+                    ctx.lineTo(points[i].x, points[i].y);
+                    ctx.stroke();
+                }
+            };
+
+            // Draw saved paths first
+            savedPaths.forEach((path, idx) => {
+                const start = path.start || lastRobotPos;
+                drawSegments(start, path.points, { type: 'saved', index: idx });
+            });
+
+            // Draw current path on top
+            drawSegments(lastRobotPos, pathPoints, { type: 'current', index: null });
+        }
+
+        function toggleDrawMode() {
+            isDrawingPath = !isDrawingPath;
+            const btn = document.getElementById('draw-btn');
+            canvas.style.pointerEvents = isDrawingPath ? 'auto' : 'none';
+            canvas.style.cursor = isDrawingPath ? 'crosshair' : 'default';
+            btn.textContent = isDrawingPath ? 'Stop Drawing' : 'Draw Path';
+            btn.style.background = isDrawingPath ? '#00aa00' : '#0066cc';
+            // Drawing always starts from robot: ensure panel reflects robot->first segment
+            renderWaypoints();
+            redrawPath();
+        }
+
+        function clearPath() {
+            pathPoints = [];
+            highlightedWaypoint = null;
+            if (highlightedPath && highlightedPath.type === 'current') {
+                highlightedPath = null;
+            }
+            redrawPath();
+            renderWaypoints();
+            updateDataDisplay();
+        }
+
+        function newPath() {
+            if (pathPoints.length > 0) {
+                savedPaths.push({ start: { x: lastRobotPos.x, y: lastRobotPos.y }, points: [...pathPoints] });
+            }
+            pathPoints = [];
+            highlightedWaypoint = null;
+            highlightedPath = null;
+            redrawPath();
+            renderWaypoints();
+            updateDataDisplay();
+        }
+
+        function generateCppCode() {
+            if (pathPoints.length === 0 && savedPaths.length === 0) {
+                alert('No paths to generate code from. Draw a path first!');
+                return;
+            }
+
+            let code = '// Generated VEX C++ code for skillsAuton()\n';
+            code += '// Copy and paste this into your skillsAuton() function\n\n';
+            
+            const robotStartX = parseFloat(document.getElementById('x-input-ft').value);
+            const robotStartY = parseFloat(document.getElementById('y-input-ft').value);
+            const robotStartHeading = parseFloat(document.getElementById('heading-input').value);
+            
+            code += `// Starting position: (${robotStartX.toFixed(2)}", ${robotStartY.toFixed(2)}") @ ${robotStartHeading.toFixed(0)}°\n`;
+            code += `calibrateIMU();\n`;
+            code += `resetEncoders();\n`;
+            code += `odometry.reset();\n`;
+            code += `drivePID.reset();\n`;
+            code += `turnPID.reset();\n\n`;
+
+            // Function to generate code for a path
+            const generatePathCode = (points, startPos, pathIndex) => {
+                let pathCode = `// Path ${pathIndex + 1}\n`;
+                let currentPos = startPos;
+                let currentHeading = robotStartHeading;
+
+                for (let i = 0; i < points.length; i++) {
+                    const target = points[i];
+                    const targetX = pxToIn(target.x);
+                    const targetY = pxToIn(target.y);
+                    
+                    // Calculate distance and angle from current position to target
+                    const dx = target.x - currentPos.x;
+                    const dy = target.y - currentPos.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy) / PX_PER_IN;
+                    
+                    // Calculate target heading (0° = left in visual, which is 180° in standard coords)
+                    let targetHeading = Math.atan2(dy, dx) * (180 / Math.PI);
+                    targetHeading = ((targetHeading - 180 + 360) % 360);
+                    if (targetHeading > 180) targetHeading -= 360;
+                    
+                    // Calculate turn needed
+                    let turnAngle = targetHeading - currentHeading;
+                    if (turnAngle > 180) turnAngle -= 360;
+                    if (turnAngle < -180) turnAngle += 360;
+                    
+                    pathCode += `// Waypoint ${i + 1}: (${targetX}", ${targetY}") - Distance: ${distance.toFixed(2)}"\n`;
+                    
+                    // Only turn if angle is significant
+                    if (Math.abs(turnAngle) > 2) {
+                        const newHeading = (currentHeading + turnAngle + 360) % 360;
+                        if (newHeading > 180) {
+                            pathCode += `turnWithPID(${(newHeading - 360).toFixed(1)});\n`;
+                        } else {
+                            pathCode += `turnWithPID(${newHeading.toFixed(1)});\n`;
+                        }
+                        currentHeading = targetHeading;
+                    }
+                    
+                    // Drive to waypoint
+                    if (distance > 0.5) {
+                        pathCode += `driveWithPID(${distance.toFixed(2)});\n`;
+                    }
+                    
+                    // Add intake/output control if needed (you can customize this)
+                    // pathCode += `// intakeMotor.spin(forward);\n`;
+                    // pathCode += `// wait(500, msec);\n`;
+                    
+                    pathCode += `updateOdometry();\n\n`;
+                    
+                    currentPos = target;
+                }
+                
+                return pathCode;
+            };
+
+            // Generate code for saved paths
+            savedPaths.forEach((path, idx) => {
+                const startPos = path.start || { x: inToPx(robotStartX), y: inToPx(robotStartY) };
+                code += generatePathCode(path.points, startPos, idx);
+            });
+
+            // Generate code for current path
+            if (pathPoints.length > 0) {
+                const startPos = { x: inToPx(robotStartX), y: inToPx(robotStartY) };
+                code += generatePathCode(pathPoints, startPos, savedPaths.length);
+            }
+
+            code += `Controller1.rumble(".−");\n`;
+            code += `// End of generated code\n`;
+
+            // Copy to clipboard and show in a dialog
+            navigator.clipboard.writeText(code).then(() => {
+                alert('C++ code copied to clipboard!\n\nPaste it into your skillsAuton() function.');
+            }).catch(() => {
+                // Fallback: show code in a prompt
+                const textarea = document.createElement('textarea');
+                textarea.value = code;
+                textarea.style.position = 'fixed';
+                textarea.style.top = '0';
+                textarea.style.left = '0';
+                textarea.style.width = '100%';
+                textarea.style.height = '100%';
+                textarea.style.zIndex = '10000';
+                textarea.style.background = '#0f1724';
+                textarea.style.color = '#e5ecf5';
+                textarea.style.padding = '20px';
+                textarea.style.fontFamily = 'monospace';
+                textarea.style.fontSize = '12px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                
+                const closeBtn = document.createElement('button');
+                closeBtn.textContent = 'Close';
+                closeBtn.style.position = 'fixed';
+                closeBtn.style.top = '10px';
+                closeBtn.style.right = '10px';
+                closeBtn.style.zIndex = '10001';
+                closeBtn.onclick = () => {
+                    document.body.removeChild(textarea);
+                    document.body.removeChild(closeBtn);
+                };
+                document.body.appendChild(closeBtn);
+            });
+        }
+
+        function exportData() {
+            const data = {
+                field: { width: 144, height: 144, unit: 'inches', pxPerIn: PX_PER_IN, pxPerFt: PX_PER_FT },
+                robotHistory: robotHistory.map(r => ({
+                    x: r.x,
+                    y: r.y,
+                    heading: r.heading,
+                    sizeW: r.sizeW ?? r.size,
+                    sizeH: r.sizeH ?? r.size
+                })),
+                currentPathInches: pathPoints.map(p => ({ x: pxToIn(p.x), y: pxToIn(p.y) })),
+                savedPathsInches: savedPaths.map(p => ({
+                    start: p.start ? { x: pxToIn(p.start.x), y: pxToIn(p.start.y) } : null,
+                    points: p.points.map(pt => ({ x: pxToIn(pt.x), y: pxToIn(pt.y) }))
+                })),
+                // Legacy keys
+                pathWaypointsInches: pathPoints.map(p => ({ x: pxToIn(p.x), y: pxToIn(p.y) })),
+                pathWaypoints: pathPoints.map(p => ({ x: pxToIn(p.x), y: pxToIn(p.y) }))
+            };
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'robot-path.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+
+                    // Clear existing state first
+                    pathPoints = [];
+                    savedPaths = [];
+                    highlightedWaypoint = null;
+                    highlightedPath = null;
+                    robotHistory = Array.isArray(data.robotHistory) ? data.robotHistory : [];
+
+                    const unit = (data.field && data.field.unit) ? data.field.unit.toLowerCase() : 'feet';
+                    const toPx = (val) => unit === 'feet' ? ftToPx(parseFloat(val)) : inToPx(parseFloat(val));
+
+                    // Load saved paths if present
+                    if (Array.isArray(data.savedPathsInches)) {
+                        savedPaths = data.savedPathsInches.map(p => ({
+                            start: p.start ? { x: toPx(p.start.x), y: toPx(p.start.y) } : null,
+                            points: (p.points || []).map(pt => ({ x: toPx(pt.x), y: toPx(pt.y) }))
+                        }));
+                    } else if (Array.isArray(data.savedPaths)) {
+                        savedPaths = data.savedPaths.map(p => ({
+                            start: p.start ? { x: toPx(p.start.x), y: toPx(p.start.y) } : null,
+                            points: (p.points || []).map(pt => ({ x: toPx(pt.x), y: toPx(pt.y) }))
+                        }));
+                    }
+
+                    // Load current path (new key) or legacy pathWaypoints
+                    if (Array.isArray(data.currentPathInches)) {
+                        pathPoints = data.currentPathInches.map(p => ({ x: toPx(p.x), y: toPx(p.y) }));
+                    } else if (Array.isArray(data.currentPath)) {
+                        pathPoints = data.currentPath.map(p => ({ x: toPx(p.x), y: toPx(p.y) }));
+                    } else if (Array.isArray(data.pathWaypointsInches)) {
+                        pathPoints = data.pathWaypointsInches.map(p => ({ x: toPx(p.x), y: toPx(p.y) }));
+                    } else if (Array.isArray(data.pathWaypoints)) {
+                        pathPoints = data.pathWaypoints.map(p => ({ x: toPx(p.x), y: toPx(p.y) }));
+                    }
+
+                    // Load last robot position if available
+                    if (data.robotHistory && data.robotHistory.length > 0) {
+                        const convertLen = (val) => unit === 'feet' ? parseFloat(val) * 12 : parseFloat(val);
+                        robotHistory = data.robotHistory.map(r => ({
+                            x: convertLen(r.x),
+                            y: convertLen(r.y),
+                            heading: r.heading,
+                            sizeW: r.sizeW ? convertLen(r.sizeW) : (r.size ? convertLen(r.size) : null),
+                            sizeH: r.sizeH ? convertLen(r.sizeH) : (r.size ? convertLen(r.size) : null)
+                        }));
+                        const lastRobot = robotHistory[robotHistory.length - 1];
+                        document.getElementById('x-input-ft').value = lastRobot.x;
+                        document.getElementById('y-input-ft').value = lastRobot.y;
+                        document.getElementById('heading-input').value = lastRobot.heading;
+                        document.getElementById('size-width-in').value = lastRobot.sizeW ?? lastRobot.size ?? 12;
+                        document.getElementById('size-height-in').value = lastRobot.sizeH ?? lastRobot.size ?? 12;
+                        updateRobot();
+                    }
+                    
+                    // Ensure waypoints checkbox is checked to show them
+                    document.getElementById('show-waypoints').checked = true;
+                    
+                    // Redraw everything
+                    redrawPath();
+                    renderWaypoints();
+                    updateDataDisplay();
+
+                    alert(`Data imported successfully!\nCurrent path: ${pathPoints.length} waypoints\nSaved paths: ${savedPaths.length}`);
+                } catch (error) {
+                    alert('Error importing file: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            
+            // Reset file input so same file can be uploaded again
+            event.target.value = '';
+        }
+
+        // Drag to draw path (straight lines, starting from robot)
+        canvas.addEventListener('mousedown', (e) => {
+            if (!isDrawingPath) return;
+            const rect = field.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (x >= 0 && x <= 600 && y >= 0 && y <= 600) {
+                pathPoints.push({ x, y });
+                redrawPath();
+                renderWaypoints();
+                updateDataDisplay();
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawingPath || e.buttons === 0) return;
+            const rect = field.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (x >= 0 && x <= 600 && y >= 0 && y <= 600) {
+                const lastPoint = pathPoints[pathPoints.length - 1];
+                if (Math.hypot(x - lastPoint.x, y - lastPoint.y) > 8) {
+                    pathPoints.push({ x, y });
+                    redrawPath();
+                    renderWaypoints();
+                }
+            }
+        });
+
+        // Drag waypoints
+        document.addEventListener('mousemove', (e) => {
+            if (draggingWaypoint !== null) {
+                const rect = field.getBoundingClientRect();
+                let x = e.clientX - rect.left;
+                let y = e.clientY - rect.top;
+                x = Math.max(0, Math.min(600, x));
+                y = Math.max(0, Math.min(600, y));
+                
+                pathPoints[draggingWaypoint] = { x, y };
+                redrawPath();
+                renderWaypoints();
+                updateDataDisplay();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (draggingWaypoint !== null) {
+                document.querySelectorAll('.waypoint.dragging').forEach(w => w.classList.remove('dragging'));
+                draggingWaypoint = null;
+            }
+        });
+
+        // Playback: run robot along the path at constant speed
+        let runRAF = null;
+        let isRunning = false;
+        let currentSegment = 0;
+        let segmentStart = null;
+        let segmentEnd = null;
+        let progress = 0; // 0..1 along segment
+        let speedPxPerS = 100; // default: 2 ft/s -> 100 px/s
+
+        function startRun() {
+            if (pathPoints.length === 0) return;
+            const speedIn = parseFloat(document.getElementById('speed-input-ft').value) || 24;
+            speedPxPerS = speedIn * PX_PER_IN;
+            isRunning = true;
+            currentSegment = 0;
+            // Start from current robot position (from input values)
+            const xIn = parseFloat(document.getElementById('x-input-ft').value);
+            const yIn = parseFloat(document.getElementById('y-input-ft').value);
+            segmentStart = { x: inToPx(xIn), y: inToPx(yIn) };
+            segmentEnd = { x: pathPoints[0].x, y: pathPoints[0].y };
+            progress = 0;
+            runStep(performance.now());
+        }
+
+        function pauseRun() {
+            isRunning = false;
+            if (runRAF) cancelAnimationFrame(runRAF);
+            runRAF = null;
+        }
+
+        function resetRun() {
+            pauseRun();
+            // Reset robot to inputs
+            updateRobot();
+        }
+
+        function runStep(prevTs) {
+            runRAF = requestAnimationFrame((ts) => {
+                if (!isRunning) return;
+                const dt = (ts - prevTs) / 1000; // seconds
+                prevTs = ts;
+                const dx = segmentEnd.x - segmentStart.x;
+                const dy = segmentEnd.y - segmentStart.y;
+                const segLen = Math.hypot(dx, dy);
+                const advance = (speedPxPerS * dt) / segLen;
+                progress = Math.min(1, progress + advance);
+                const cx = segmentStart.x + dx * progress;
+                const cy = segmentStart.y + dy * progress;
+            const angleDeg = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+            // Robot graphic faces up at 0°; map screen-space angle (0=right, 90=down) to CSS (0=up)
+            const cssHeading = (angleDeg + 90) % 360;
+
+                document.documentElement.style.setProperty('--robot-x', cx + 'px');
+                document.documentElement.style.setProperty('--robot-y', cy + 'px');
+            document.documentElement.style.setProperty('--robot-heading', cssHeading + 'deg');
+
+                if (progress >= 1) {
+                    // Move to next segment
+                    currentSegment += 1;
+                    if (currentSegment >= pathPoints.length) {
+                        // Finished
+                        isRunning = false;
+                        return;
+                    } else {
+                        segmentStart = { x: cx, y: cy };
+                        segmentEnd = { x: pathPoints[currentSegment].x, y: pathPoints[currentSegment].y };
+                        progress = 0;
+                    }
+                }
+
+                runStep(prevTs);
+            });
+        }
+
+        // Arrow rotation
+        document.getElementById('front-arrow').addEventListener('mousedown', (e) => {
+            arrowDragging = true;
+            e.stopPropagation();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (arrowDragging) {
+                const fieldRect = field.getBoundingClientRect();
+                const robotElement = document.querySelector('.robot');
+                const robotRect = robotElement.getBoundingClientRect();
+                const centerX = robotRect.left + robotRect.width / 2;
+                const centerY = robotRect.top + robotRect.height / 2;
+
+                const dx = e.clientX - centerX;
+                const dy = e.clientY - centerY;
+                let absAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+                absAngle = (absAngle + 360) % 360;
+                const inputHeading = (absAngle - HEADING_ZERO_OFFSET + 360) % 360;
+
+                document.getElementById('heading-input').value = Math.round(inputHeading);
+                updateRobot();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            arrowDragging = false;
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            const step = 0.25;
+            let xFt = parseFloat(document.getElementById('x-input-ft').value);
+            let yFt = parseFloat(document.getElementById('y-input-ft').value);
+            let heading = parseFloat(document.getElementById('heading-input').value);
+
+            switch(e.key) {
+                case 'ArrowUp': yFt = Math.max(0, yFt - step); e.preventDefault(); break;
+                case 'ArrowDown': yFt = Math.min(12, yFt + step); e.preventDefault(); break;
+                case 'ArrowLeft': xFt = Math.max(0, xFt - step); e.preventDefault(); break;
+                case 'ArrowRight': xFt = Math.min(12, xFt + step); e.preventDefault(); break;
+                case '[': heading = (heading - 15 + 360) % 360; e.preventDefault(); break;
+                case ']': heading = (heading + 15) % 360; e.preventDefault(); break;
+                default: return;
+            }
+
+            document.getElementById('x-input-ft').value = xFt.toFixed(2);
+            document.getElementById('y-input-ft').value = yFt.toFixed(2);
+            document.getElementById('heading-input').value = Math.round(heading);
+            updateRobot();
+        });
+
+        // Initialize
+        updateRobot();
+    </script>
+</body>
+</html>
