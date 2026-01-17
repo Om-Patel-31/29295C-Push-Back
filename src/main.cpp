@@ -1,93 +1,14 @@
 #include "vex.h"
+#include "PIDController.h"
+#include "OdometryTracker.h"
+#include "DriverControl.h"
 #include <cmath>
 using namespace vex;
 
 competition Competition;
 
-class PIDController {
-public:
-  double kP, kI, kD;
-  double integral = 0.0;
-  double prevError = 0.0;
-  double maxIntegral = 50.0;
-  double tolerance = 1.0;
-  bool enabled = false;
-  double lastP = 0.0;
-  double lastI = 0.0;
-  double lastD = 0.0;
-
-  PIDController(double p, double i, double d) : kP(p), kI(i), kD(d) {}
-
-  double calculate(double error, double dt) {
-    lastP = kP * error;
-
-    integral += error * dt;
-    if (integral > maxIntegral) integral = maxIntegral;
-    if (integral < -maxIntegral) integral = -maxIntegral;
-    lastI = kI * integral;
-
-    lastD = 0.0;
-    if (dt > 0) {
-      lastD = kD * (error - prevError) / dt;
-    }
-
-    prevError = error;
-
-    return lastP + lastI + lastD;
-  }
-
-  void reset() {
-    integral = 0.0;
-    prevError = 0.0;
-  }
-
-  bool atTarget(double error) {
-    return std::abs(error) < tolerance;
-  }
-};
-
-class OdometryTracker {
-public:
-  double x = 0.0;
-  double y = 0.0;
-  double heading = 0.0;
-  double wheelBase = 10;
-  double trackingWheelRadius = 3.25;
-
-  void update(double leftDist, double rightDist, double imuHeading) {
-    double avgDist = (leftDist + rightDist) / 2.0;
-
-    heading = imuHeading;
-
-    double headingRad = heading * M_PI / 180.0;
-    x += avgDist * std::cos(headingRad);
-    y += avgDist * std::sin(headingRad);
-  }
-
-  void reset() {
-    x = 0.0;
-    y = 0.0;
-    heading = 0.0;
-  }
-
-  void setPosition(double newX, double newY, double newHeading) {
-    x = newX;
-    y = newY;
-    heading = newHeading;
-  }
-
-  double distanceTo(double targetX, double targetY) {
-    double dx = targetX - x;
-    double dy = targetY - y;
-    return std::sqrt(dx * dx + dy * dy);
-  }
-
-  double headingTo(double targetX, double targetY) {
-    double dx = targetX - x;
-    double dy = targetY - y;
-    return std::atan2(dy, dx) * 180.0 / M_PI;
-  }
-};
+// DRIVER CONTROL CONFIGURATION - Change this to switch control schemes
+DriverControl driverControl(ControlType::ARCADE, 10, 2.0, 60, 50);
 
 vex::brain Brain;
 vex::controller Controller1;
@@ -115,7 +36,7 @@ digital_out Pistons(Brain.ThreeWirePort.C);
 
 vex::inertial inertialSensor = vex::inertial(PORT21);
 
-PIDController drivePID(3, 0.05, 0.00001);
+PIDController drivePID(3, 0.5, 0.01);
 PIDController turnPID(0.5, 0.01, 0.05);
 OdometryTracker odometry;
 
@@ -124,7 +45,7 @@ void updateOdometry();
 void calibrateIMU();
 extern bool matchAutonSide;
 
-const int IMU_distance = 8;
+const int IMU_distance = 13;
 
 void intakeForwardPressed() { 
     intakeMotor.spin(reverse); 
@@ -222,26 +143,6 @@ void selectLeftAuton() {
   Brain.Screen.print("Auton: LEFT");
 }
 
-const int DEADZONE_THRESHOLD = 10;
-
-static double slewTo(double target, double current, double maxDelta) {
-  double diff = target - current;
-  if (current == 0.0) {
-    if (std::abs(diff) <= maxDelta) return target;
-    return current + (diff > 0.0 ? maxDelta : -maxDelta);
-  }
-
-  if ((current > 0.0 && target >= 0.0) || (current < 0.0 && target <= 0.0)) {
-    if (std::abs(diff) <= maxDelta) return target;
-    return current + (diff > 0.0 ? maxDelta : -maxDelta);
-  }
-
-  if (std::abs(current) <= maxDelta) return 0.0;
-  return current + (current > 0.0 ? -maxDelta : maxDelta);
-}
-
-double slewMaxDelta = 7.50;
-
 template<typename T>
 static T clamp(T value, T minVal, T maxVal) {
     if (value > maxVal) return maxVal;
@@ -249,50 +150,45 @@ static T clamp(T value, T minVal, T maxVal) {
     return value;
 }
 
-static double clampPercent(double v) {
-    return clamp(v, -100.0, 100.0);
-}
-
-static double expoCurve(double inputPercent, double exponent) {
-  double v = clampPercent(inputPercent);
-  double sign = (v >= 0.0) ? 1.0 : -1.0;
-  double absNorm = std::abs(v) / 100.0;
-  double shaped = std::pow(absNorm, exponent) * 100.0;
-  return sign * shaped;
-}
-
-double INPUT_EXPO = 2.0;
-
 void increaseExpo() {
-    if (INPUT_EXPO < 5.0) INPUT_EXPO = std::round((INPUT_EXPO + 0.1) * 100.0) / 100.0;
-    Controller1.Screen.clearLine(3);
-    Controller1.Screen.setCursor(3, 1);
-    Controller1.Screen.print("Expo: %.2f", INPUT_EXPO);
+    double currentExpo = driverControl.getExponent();
+    if (currentExpo < 5.0) {
+      driverControl.setExponent(std::round((currentExpo + 0.1) * 100.0) / 100.0);
+      Controller1.Screen.clearLine(3);
+      Controller1.Screen.setCursor(3, 1);
+      Controller1.Screen.print("Expo: %.2f", driverControl.getExponent());
+    }
   }
 
   void decreaseExpo() {
-    if (INPUT_EXPO > 1.0) INPUT_EXPO = std::round((INPUT_EXPO - 0.1) * 100.0) / 100.0;
-    Controller1.Screen.clearLine(3);
-    Controller1.Screen.setCursor(3, 1);
-    Controller1.Screen.print("Expo: %.2f", INPUT_EXPO);
+    double currentExpo = driverControl.getExponent();
+    if (currentExpo > 1.0) {
+      driverControl.setExponent(std::round((currentExpo - 0.1) * 100.0) / 100.0);
+      Controller1.Screen.clearLine(3);
+      Controller1.Screen.setCursor(3, 1);
+      Controller1.Screen.print("Expo: %.2f", driverControl.getExponent());
+    }
   }
 
-  void increaseSlew() {
-    if (slewMaxDelta < 50.0) slewMaxDelta++;
-    Brain.Screen.clearLine(3);
-    Brain.Screen.setCursor(3, 1);
-    Brain.Screen.print("Slew: %.0f", slewMaxDelta);
+  void increaseTurnSens() {
+    int currentSens = driverControl.getTurnSensitivity();
+    if (currentSens < 100) {
+      driverControl.setTurnSensitivity(currentSens + 5);
+      Brain.Screen.clearLine(3);
+      Brain.Screen.setCursor(3, 1);
+      Brain.Screen.print("Turn Sens: %d", driverControl.getTurnSensitivity());
+    }
   }
 
-  void decreaseSlew() {
-    if (slewMaxDelta > 0.0) slewMaxDelta--;
-    Brain.Screen.clearLine(3);
-    Brain.Screen.setCursor(3, 1);
-    Brain.Screen.print("Slew: %.0f", slewMaxDelta);
+  void decreaseTurnSens() {
+    int currentSens = driverControl.getTurnSensitivity();
+    if (currentSens > 10) {
+      driverControl.setTurnSensitivity(currentSens - 5);
+      Brain.Screen.clearLine(3);
+      Brain.Screen.setCursor(3, 1);
+      Brain.Screen.print("Turn Sens: %d", driverControl.getTurnSensitivity());
+    }
 }
-
-int turnSensitivity = 60;
-const int slowTurnSensitivity = 50;
 
 void driveWithPID(double targetDist, int velocity = 100, int timeout = 5000, bool useDistanceSensor = false) {
   drivePID.reset();
@@ -397,7 +293,7 @@ void resetEncoders() {
     outputMotor.resetPosition();
 }
 
-bool skillsMode = false;
+bool skillsMode = true;
 bool matchAutonSide = false;
 bool autonTestActive = false;
 
@@ -482,7 +378,12 @@ void matchAutonLeft() {
   }
 
 void skillsAuton() {
-  // Starting position: (26.40", 87.60") @ 0°
+  // Generated VEX C++ code for skillsAuton()
+  // Copy and paste this into your skillsAuton() function
+
+  // Starting position: (27.70", 88.00") @ 0°
+  // IMU offset from center: 13.00" (forward)
+  // Calibration offsets: X=4.00", Y=0.50"
   calibrateIMU();
   resetEncoders();
   odometry.reset();
@@ -490,107 +391,12 @@ void skillsAuton() {
   turnPID.reset();
 
   // Path 1
-  // Waypoint 1: (26.16", 119.52") - Distance: 31.92"
-  turnWithPID(-89.6);
-  driveWithPID(31.92);
-  updateOdometry();
-
-  // Waypoint 2: (4.32", 119.76") - Distance: 21.84"
-  turnWithPID(-0.6);
-  driveWithPID(21.84);
-  updateOdometry();
-
-  // Waypoint 3: (15.36", 119.76") - Distance: 11.04"
-  turnWithPID(180.0);
-  driveWithPID(11.04);
-  updateOdometry();
-
-  // Waypoint 4: (26.88", 131.76") - Distance: 16.63"
-  turnWithPID(-133.8);
-  driveWithPID(16.63);
-  updateOdometry();
-
-  // Waypoint 5: (117.36", 132.00") - Distance: 90.48"
-  turnWithPID(-179.8);
-  driveWithPID(90.48);
-  updateOdometry();
-
-  // Waypoint 6: (117.36", 119.76") - Distance: 12.24"
-  turnWithPID(90.0);
-  driveWithPID(12.24);
-  updateOdometry();
-
-  // Waypoint 7: (98.88", 119.76") - Distance: 18.48"
-  turnWithPID(0.0);
-  driveWithPID(18.48);
-  updateOdometry();
-
-  // Waypoint 8: (140.64", 120.00") - Distance: 41.76"
-  turnWithPID(-179.7);
-  driveWithPID(41.76);
-  updateOdometry();
-
-  // Waypoint 9: (117.36", 120.00") - Distance: 23.28"
-  turnWithPID(0.0);
-  driveWithPID(23.28);
-  updateOdometry();
-
-  // Waypoint 10: (117.60", 27.12") - Distance: 92.88"
-  turnWithPID(90.1);
-  driveWithPID(92.88);
-  updateOdometry();
-
-  // Waypoint 11: (136.56", 27.12") - Distance: 18.96"
-  turnWithPID(180.0);
-  driveWithPID(18.96);
-  updateOdometry();
-
-  // Waypoint 12: (127.68", 27.12") - Distance: 8.88"
-  turnWithPID(0.0);
-  driveWithPID(8.88);
-  updateOdometry();
-
-  // Waypoint 13: (117.12", 16.32") - Distance: 15.10"
-  turnWithPID(45.6);
-  driveWithPID(15.10);
-  updateOdometry();
-
-  // Waypoint 14: (26.88", 16.32") - Distance: 90.24"
-  turnWithPID(0.0);
-  driveWithPID(90.24);
-  updateOdometry();
-
-  // Waypoint 15: (26.88", 27.60") - Distance: 11.28"
-  turnWithPID(-90.0);
-  driveWithPID(11.28);
-  updateOdometry();
-
-  // Waypoint 16: (43.44", 27.60") - Distance: 16.56"
-  turnWithPID(180.0);
-  driveWithPID(16.56);
-  updateOdometry();
-
-  // Waypoint 17: (8.40", 27.84") - Distance: 35.04"
-  turnWithPID(-0.4);
-  driveWithPID(35.04);
-  updateOdometry();
-
-  // Waypoint 18: (43.44", 27.60") - Distance: 35.04"
-  turnWithPID(179.6);
-  driveWithPID(35.04);
-  updateOdometry();
-
-  // Waypoint 19: (7.92", 48.00") - Distance: 40.96"
-  turnWithPID(-29.9);
-  driveWithPID(40.96);
-  updateOdometry();
-
-  // Waypoint 20: (7.92", 78.72") - Distance: 30.72"
-  turnWithPID(-90.0);
-  driveWithPID(30.72);
+  // Waypoint 1: (22.98", 118.83") - Distance: 31.34" (IMU: 52.06")
+  driveWithPID(31.34 + IMU_distance);
   updateOdometry();
 
   Controller1.rumble(".−");
+  // End of generated code
 }
 
 // --------------------
@@ -655,80 +461,48 @@ void autonomous(void) {
 }
 
 void usercontrol(void) {
-
   // IMU already calibrated in pre_auton, no need to recalibrate
   odometry.reset();
 
-    double currentLeft = 0.0;
-    double currentRight = 0.0;
-    double currentDrive = 0.0;
-    int lastTelemetryMs = Brain.timer(msec);
+  double leftOutput = 0.0;
+  double rightOutput = 0.0;
+  int lastTelemetryMs = Brain.timer(msec);
 
-    
   while (1) {
-    // Distance sensor removed; no longer printing its readings
+    // Toggle between skills and match mode
     if (Controller1.ButtonLeft.pressing()) {
-        skillsMode = !skillsMode;
-        Brain.Screen.clearScreen();
-        Brain.Screen.setCursor(1, 1);
-        Brain.Screen.print("Mode: %s", skillsMode ? "SKILLS" : "MATCH");
-        wait(300, msec);
-      }
+      skillsMode = !skillsMode;
+      Brain.Screen.clearScreen();
+      Brain.Screen.setCursor(1, 1);
+      Brain.Screen.print("Mode: %s", skillsMode ? "SKILLS" : "MATCH");
+      wait(300, msec);
+    }
 
-      int drivePower = Controller1.Axis3.position(percent);
-      int turnPower = Controller1.Axis1.position(percent);
+    // Get driver control outputs (ButtonY for slow turn mode)
+    bool slowTurn = Controller1.ButtonY.pressing();
+    driverControl.calculate(Controller1, leftOutput, rightOutput, slowTurn);
 
-    if (std::abs(drivePower) < DEADZONE_THRESHOLD) drivePower = 0;
-    if (std::abs(turnPower) < DEADZONE_THRESHOLD) turnPower = 0;
-
-    int activeTurnSens = Controller1.ButtonY.pressing() ? slowTurnSensitivity : turnSensitivity;
-    int scaledTurn = (turnPower * activeTurnSens) / 100;
-
-      // Apply expo separately to drive and turn
-      double targetDrive = expoCurve((double)drivePower, INPUT_EXPO);
-      double targetTurn = expoCurve((double)scaledTurn, INPUT_EXPO);
-
-      // Direct response - no slew limiting for instant control
-      currentDrive = targetDrive;
-
-      // Compose final motor targets for instant response
-      double targetLeft = clampPercent(currentDrive + targetTurn);
-      double targetRight = clampPercent(currentDrive - targetTurn);
-
-      currentLeft = targetLeft;
-      currentRight = targetRight;
-
-    leftSide.setVelocity(std::abs(currentLeft), percent);
-    rightSide.setVelocity(std::abs(currentRight), percent);
+    leftSide.setVelocity(std::abs(leftOutput), percent);
+    rightSide.setVelocity(std::abs(rightOutput), percent);
     
-    if (std::abs(currentLeft) < 0.5 && std::abs(currentRight) < 0.5) {
-        leftSide.stop(coast);
-        rightSide.stop(coast);
-      } else {
-        leftSide.spin(currentLeft >= 0.0 ? forward : reverse);
-        rightSide.spin(currentRight >= 0.0 ? forward : reverse);
+    if (std::abs(leftOutput) < 0.5 && std::abs(rightOutput) < 0.5) {
+      leftSide.stop(coast);
+      rightSide.stop(coast);
+    } else {
+      leftSide.spin(leftOutput >= 0.0 ? forward : reverse);
+      rightSide.spin(rightOutput >= 0.0 ? forward : reverse);
     }
 
-    int nowMs = Brain.timer(msec);
-    if (nowMs - lastTelemetryMs >= 100) {
-      lastTelemetryMs = nowMs;
-      updateOdometry();  // Only update odometry every 100ms to avoid lag
-      Brain.Screen.setCursor(5, 1);
-      Brain.Screen.print("T:%d L:%.1f R:%.1f   ", scaledTurn, currentLeft, currentRight);
-
-      double raw_heading = inertialSensor.heading();
-      double heading_deg = fmod(raw_heading, 360.0);
-      if (heading_deg < 0) heading_deg += 360.0;
-      Brain.Screen.setCursor(6, 1);
-      Brain.Screen.print("H: %.1f deg         ", heading_deg);
-
-      Brain.Screen.setCursor(7, 1);
-      Brain.Screen.print("X:%.1f Y:%.1f HDG:%.1f   ", odometry.x, odometry.y, odometry.heading);
+    // Optional telemetry display every 100ms
+    int currentMs = Brain.timer(msec);
+    if (currentMs - lastTelemetryMs > 100) {
+      Brain.Screen.setCursor(3, 1);
+      Brain.Screen.print("L:%.1f R:%.1f   ", leftOutput, rightOutput);
+      lastTelemetryMs = currentMs;
     }
 
-      wait(5, msec);
+    wait(20, msec);
   }
-
 }
 
 int main() {
@@ -736,4 +510,8 @@ int main() {
 
   Competition.autonomous(autonomous);
   Competition.drivercontrol(usercontrol);
+
+  while (true) {
+    wait(100, msec);
+  }
 }
