@@ -1,8 +1,3 @@
-/*
- * Copyright (c) 2026 Stratford Robotics 29295
- * Developer: Om Patel
- */
-
 #ifndef ODOMETRYTRACKER_H
 #define ODOMETRYTRACKER_H
 
