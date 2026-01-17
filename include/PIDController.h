@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Stratford Robotics 29295
+ * Developer: Om Patel
+ */
+
 #ifndef PIDCONTROLLER_H
 #define PIDCONTROLLER_H
 
