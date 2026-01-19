@@ -601,6 +601,7 @@
                     <button class="toggle-btn active" id="mode-skills">Skills</button>
                 </div>
                 <div id="match_field">
+                    <div id="timer-display" style="display: none; position: absolute; top: 16px; right: 16px; z-index: 4; padding: 12px 16px; border-radius: 10px; border: 2px solid var(--border); background: var(--card); color: var(--text); font-weight: 700; text-align: center; font-size: 28px; min-width: 100px;">0:00</div>
                     <canvas id="path-canvas" width="600" height="600"></canvas>
                     <div class="waypoint-overlay" id="waypoint-overlay"></div>
                     <div class="robot">
@@ -716,9 +717,16 @@
             }
         });
 
-        function setWaypointDelay(idx, delayMs) {
+        function setWaypointDelay(idx, delaySec) {
             if (!pathPoints[idx]) return;
-            pathPoints[idx].delay = Math.max(0, parseInt(delayMs) || 0);
+            pathPoints[idx].delay = Math.max(0, parseFloat(delaySec) || 0) * 1000; // Convert seconds to ms
+            renderWaypoints();
+            updateDataDisplay();
+        }
+
+        function setWaypointSpeed(idx, speedIn) {
+            if (!pathPoints[idx]) return;
+            pathPoints[idx].speed = Math.max(0.1, parseFloat(speedIn) || 24);
             renderWaypoints();
             updateDataDisplay();
         }
@@ -954,8 +962,10 @@
             let runningLen = 0;
             let runningIMULen = 0;
             const imuOffset = parseFloat(document.getElementById('imu-offset').value) || 0;
-            // Track heading so displayed angles are relative to the robot's current heading
-            let prevHeading = normalizeHeading(parseFloat(document.getElementById('heading-input').value) || 0);
+            const robotHeading = normalizeHeading(parseFloat(document.getElementById('heading-input').value) || 0);
+            // Calculate angles relative to robot heading (input heading is zero reference)
+            let prevHeading = robotHeading;
+            let prevHeadingForImu = robotHeading; // Track heading for IMU arc calculation
             const wrapAngle = (a) => ((a + 540) % 360) - 180; // wrap to [-180,180]
             pathPoints.forEach((p, idx) => {
                 const prev = idx === 0 ? lastRobotPos : pathPoints[idx - 1];
@@ -967,7 +977,7 @@
                 const normalizedAngle = displayAngle > 180 ? displayAngle - 360 : displayAngle;
                 // Shift by +90° (updated alignment with robot heading convention)
                 const headingAdjusted = wrapAngle(normalizedAngle + 90);
-                // Relative turn from current heading; first segment uses robot heading, following use previous segment heading
+                // Relative turn from robot heading (robot heading is now zero reference)
                 const relativeAngle = wrapAngle(headingAdjusted - prevHeading);
                 // If essentially straight, show the current heading instead of a tiny turn
                 const angleForDisplay = Math.abs(relativeAngle) < 1 ? normalizeHeading(prevHeading) : relativeAngle;
@@ -976,20 +986,21 @@
                 runningLen += segLen;
                 
                 // Calculate IMU distance (accounts for arc during turns)
-                const prevHeadingForImu = idx === 0 ? normalizeHeading(parseFloat(document.getElementById('heading-input').value)) : Math.atan2(pathPoints[idx-1].y - (idx > 1 ? pathPoints[idx-2].y : lastRobotPos.y), pathPoints[idx-1].x - (idx > 1 ? pathPoints[idx-2].x : lastRobotPos.x)) * (180 / Math.PI);
-                const currentHeading = angle;
-                let turnAngle = ((currentHeading - prevHeadingForImu + 540) % 360) - 180;
+                const currentHeadingForImu = headingAdjusted;
+                let turnAngle = ((currentHeadingForImu - prevHeadingForImu + 540) % 360) - 180;
                 const turnRad = turnAngle * (Math.PI / 180);
                 const arcDistance = Math.abs(imuOffset * turnRad);
                 const segIMULen = segLen + arcDistance;
                 runningIMULen += segIMULen;
+                prevHeadingForImu = currentHeadingForImu;
 
                 const item = document.createElement('div');
                 item.className = 'waypoint-item';
                 if (highlightedWaypoint === idx) {
                     item.classList.add('highlighted');
                 }
-                const delay = p.delay || 0;
+                const delay = (p.delay || 0) / 1000; // Convert ms back to seconds for display
+                const speed = p.speed || 24;
                 const isReversed = p.reverse || false;
                 const imuDistInfo = imuOffset !== 0 ? `<div style="color: rgba(255, 174, 94, 0.9); font-size: 10px;">IMU dist: ${segIMULen.toFixed(2)} in | Total IMU: ${runningIMULen.toFixed(2)} in</div>` : '';
                 item.innerHTML = `
@@ -999,8 +1010,12 @@
                     ${imuDistInfo}
                     <div class="waypoint-item-angle">${isReversed ? '⬅' : '→'} Angle: ${Math.round(angleForDisplay)}°${isReversed ? ' (reversed)' : ''}</div>
                     <div class="delay-input-container">
-                        <label>Delay (ms):</label>
-                        <input type="number" value="${delay}" min="0" step="100" onchange="setWaypointDelay(${idx}, this.value)">
+                        <label>Speed (in/s):</label>
+                        <input type="number" value="${speed}" min="0.1" step="0.5" onchange="setWaypointSpeed(${idx}, this.value)">
+                    </div>
+                    <div class="delay-input-container">
+                        <label>Delay (sec):</label>
+                        <input type="number" value="${delay.toFixed(1)}" min="0" step="0.1" onchange="setWaypointDelay(${idx}, this.value)">
                     </div>
                     <div class="waypoint-item-controls">
                         <button onclick="highlightWaypoint(${idx})">Highlight</button>
@@ -1170,13 +1185,9 @@
             const generatePathCode = (points, startPos, pathIndex) => {
                 let pathCode = `// Path ${pathIndex + 1}\n`;
                 let currentPos = startPos;
-                // Align starting heading with the +90° UI convention used for segment headings
-                let currentHeading = (() => {
-                    let h = normalizeHeading(robotStartHeading);
-                    h = ((h + 90 + 360) % 360);
-                    if (h > 180) h -= 360;
-                    return h;
-                })();
+                // Heading input is the zero reference point
+                let currentHeading = normalizeHeading(robotStartHeading);
+                let currentHeadingForImu = normalizeHeading(robotStartHeading); // Track for IMU arc calculation
 
                 for (let i = 0; i < points.length; i++) {
                     const target = points[i];
@@ -1188,7 +1199,7 @@
                     const dy = target.y - currentPos.y;
                     const distance = Math.sqrt(dx * dx + dy * dy) / PX_PER_IN;
 
-                    // UI-aligned heading (+90 shift) for turn commands
+                    // Heading (+90 shift) relative to robot input heading
                     let targetHeading = Math.atan2(dy, dx) * (180 / Math.PI);
                     targetHeading = ((targetHeading + 90 + 360) % 360);
                     if (targetHeading > 180) targetHeading -= 360;
@@ -1196,16 +1207,7 @@
                     // Raw heading (no +90) to match UI IMU distance calc
                     const headingRaw = normalizeHeading(Math.atan2(dy, dx) * (180 / Math.PI));
 
-                    // Match UI IMU arc distance calculation (uses previous segment vector, no +90)
-                    const prevVectorHeadingRaw = (() => {
-                        if (i === 0) return normalizeHeading(robotStartHeading);
-                        const prevPt = points[i - 1];
-                        const prevPrev = i > 1 ? points[i - 2] : startPos;
-                        return normalizeHeading(Math.atan2(prevPt.y - prevPrev.y, prevPt.x - prevPrev.x) * (180 / Math.PI));
-                    })();
-                    
-                    // Calculate turn needed (skip first segment turn because start heading is already aligned)
-                    // Use current - target so right turns come out positive after sign flip below
+                    // Calculate turn needed (robot heading is the zero reference)
                     let turnAngle = currentHeading - targetHeading;
                     if (turnAngle > 180) turnAngle -= 360;
                     if (turnAngle < -180) turnAngle += 360;
@@ -1214,13 +1216,20 @@
                         currentHeading = targetHeading;
                     }
 
-                    // Calculate IMU distance to match UI (uses raw heading delta between segments)
-                    const turnRadIMU = Math.abs(headingRaw - prevVectorHeadingRaw) * (Math.PI / 180);
+                    // Calculate IMU distance using heading delta (matches UI calculation)
+                    const targetHeadingForImu = targetHeading;
+                    let imuTurnAngle = targetHeadingForImu - currentHeadingForImu;
+                    if (imuTurnAngle > 180) imuTurnAngle -= 360;
+                    if (imuTurnAngle < -180) imuTurnAngle += 360;
+                    const turnRadIMU = imuTurnAngle * (Math.PI / 180);
                     const arcDistance = Math.abs(imuOffset * turnRadIMU);
                     const imuDistanceCalc = distance + arcDistance;
                     const imuDistNote = imuOffset !== 0 ? ` (IMU: ${imuDistanceCalc.toFixed(2)}")` : '';
                     
                     pathCode += `// Waypoint ${i + 1}: (${targetX}", ${targetY}") - Distance: ${distance.toFixed(2)}"${imuDistNote}\n`;
+                    
+                    // Update heading tracker
+                    currentHeadingForImu = targetHeadingForImu;
                     
                     // Check if waypoint is reversed (drive backwards)
                     const isReversed = target.reverse || false;
@@ -1554,6 +1563,37 @@
         let speedPxPerS = 100; // default: 2 ft/s -> 100 px/s
         let delayEndTime = null; // for waypoint delays
         let waypointReachedTime = null; // track when waypoint was reached
+        let timerStartTime = null; // for match/skills timer
+        let timerMaxSeconds = 60; // default to skills (60 seconds)
+
+        function updateTimerDisplay() {
+            const timerDisplay = document.getElementById('timer-display');
+            if (!timerStartTime || !isRunning) return;
+            
+            const elapsedMs = performance.now() - timerStartTime;
+            const elapsedSec = Math.max(0, timerMaxSeconds - elapsedMs / 1000);
+            const minutes = Math.floor(elapsedSec / 60);
+            const seconds = Math.floor(elapsedSec % 60);
+            const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            timerDisplay.textContent = timeStr;
+            
+            // Change color based on time remaining
+            if (elapsedSec <= 0) {
+                timerDisplay.style.color = 'var(--danger)';
+                timerDisplay.style.background = 'rgba(241, 91, 91, 0.1)';
+                timerDisplay.style.borderColor = 'var(--danger)';
+                isRunning = false;
+                pauseRun();
+            } else if (elapsedSec <= 10) {
+                timerDisplay.style.color = '#ff9800';
+                timerDisplay.style.background = 'rgba(255, 152, 0, 0.1)';
+                timerDisplay.style.borderColor = '#ff9800';
+            } else {
+                timerDisplay.style.color = 'var(--text)';
+                timerDisplay.style.background = 'var(--card)';
+                timerDisplay.style.borderColor = 'var(--border)';
+            }
+        }
 
         function startRun() {
             if (pathPoints.length === 0) return;
@@ -1567,6 +1607,16 @@
             segmentStart = { x: inToPx(xIn), y: inToPx(yIn) };
             segmentEnd = { x: pathPoints[0].x, y: pathPoints[0].y };
             progress = 0;
+            
+            // Set timer based on field mode
+            timerMaxSeconds = fieldMode === 'match' ? 15 : 60;
+            timerStartTime = performance.now();
+            const timerDisplay = document.getElementById('timer-display');
+            timerDisplay.style.display = 'block';
+            timerDisplay.style.color = 'var(--text)';
+            timerDisplay.style.background = 'var(--card)';
+            timerDisplay.style.borderColor = 'var(--border)';
+            
             runStep(performance.now());
         }
 
@@ -1579,9 +1629,13 @@
         function resetRun() {
             pauseRun();
             waypointReachedTime = null;
+            timerStartTime = null;
             // Remove reversed class from arrow
             const arrow = document.getElementById('front-arrow');
             arrow.classList.remove('reversed');
+            // Reset timer display
+            const timerDisplay = document.getElementById('timer-display');
+            timerDisplay.style.display = 'none';
             // Reset robot to inputs
             updateRobot();
         }
@@ -1598,6 +1652,7 @@
                     
                     if (elapsedDelay < delay) {
                         // Still waiting at waypoint
+                        updateTimerDisplay(); // Keep timer running during delay
                         runStep(prevTs);
                         return;
                     } else {
@@ -1611,6 +1666,7 @@
                         segmentStart = pathPoints[currentSegment - 1];
                         segmentEnd = { x: pathPoints[currentSegment].x, y: pathPoints[currentSegment].y };
                         progress = 0;
+                        prevTs = ts; // Update timestamp to prevent jump
                     }
                 }
                 
@@ -1619,19 +1675,28 @@
                 const dx = segmentEnd.x - segmentStart.x;
                 const dy = segmentEnd.y - segmentStart.y;
                 const segLen = Math.hypot(dx, dy);
-                const advance = (speedPxPerS * dt) / segLen;
+                
+                // Use waypoint-specific speed if available, otherwise use default
+                const waypoint = pathPoints[currentSegment];
+                const waypointSpeed = waypoint && waypoint.speed ? waypoint.speed : 24; // default 24 in/s
+                const segmentSpeedPxPerS = waypointSpeed * PX_PER_IN;
+                
+                const advance = (segmentSpeedPxPerS * dt) / segLen;
                 progress = Math.min(1, progress + advance);
                 const cx = segmentStart.x + dx * progress;
                 const cy = segmentStart.y + dy * progress;
+                // Calculate angle relative to robot's input heading
                 const angleDeg = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
                 
-                const waypoint = pathPoints[currentSegment];
                 const isReversed = waypoint && waypoint.reverse;
                 const cssHeading = (angleDeg + 90) % 360;
 
                 document.documentElement.style.setProperty('--robot-x', cx + 'px');
                 document.documentElement.style.setProperty('--robot-y', cy + 'px');
                 document.documentElement.style.setProperty('--robot-heading', cssHeading + 'deg');
+                
+                // Update timer display
+                updateTimerDisplay();
                 
                 // Flip arrow for reversed waypoints
                 const arrow = document.getElementById('front-arrow');
