@@ -530,41 +530,63 @@
 
         <div class="control-slab">
             <div class="controls">
-                <div class="field-group">
-                    <label>X (in)</label>
+                <div class="field-group" style="position: relative; top: -90px;">
+                    <label style="white-space: nowrap; position: relative; left: 7px;">X (in)</label>
                     <input type="number" id="x-input-ft" value="27.7" step="1" min="0" max="144">
                 </div>
-                <div class="field-group">
-                    <label>Y (in)</label>
+                <div class="field-group" style="position: relative; top: -90px;">
+                    <label style="white-space: nowrap; position: relative; left: 7px;">Y (in)</label>
                     <input type="number" id="y-input-ft" value="88.5" step="1" min="0" max="144">
                 </div>
-                <div class="field-group">
-                    <label>Heading (°)</label>
+                <div class="field-group" style="position: relative; top: -90px;">
+                    <label style="white-space: nowrap; position: relative; left: 7px;">Heading (°)</label>
                     <input type="number" id="heading-input" value="0" min="0" max="360" step="1">
                 </div>
-                <div class="field-group" style="align-self: flex-end;">
+                <div class="field-group" style="align-self: flex-end; position: relative; top: -90px;">
                     <button class="secondary" onclick="rotate180()" style="padding: 10px; margin: 0;">Rotate 180°</button>
                 </div>
-                <div class="field-group">
-                    <label>Width (in)</label>
+                <div class="field-group" style="position: relative; top: -90px;">
+                    <label style="white-space: nowrap; position: relative; left: 7px;">Width (in)</label>
                     <input type="number" id="size-width-in" value="15" step="0.5" min="5" max="48">
                 </div>
-                <div class="field-group">
-                    <label>Height (in)</label>
+                <div class="field-group" style="position: relative; top: -90px;">
+                    <label style="white-space: nowrap; position: relative; left: 7px;">Height (in)</label>
                     <input type="number" id="size-height-in" value="15" step="0.5" min="5" max="48">
                 </div>
-                <div class="field-group">
-                    <label>Speed (in/s)</label>
-                    <input type="number" id="speed-input-ft" value="10" step="0.5" min="3" max="120">
-                </div>
-                <div class="field-group">
-                    <label>IMU Offset (in)</label>
-                    <input type="number" id="imu-offset" value="0" step="0.25" min="-12" max="12" title="Distance from robot center to IMU (forward is positive)">
-                </div>
-                <div class="field-group" style="align-self: center;">
-                    <label style="display: flex; gap: 8px; align-items: center; color: var(--text); font-weight: 600;">
-                        <input type="checkbox" id="show-waypoints" checked> Show waypoints
-                    </label>
+                                <div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px 2px 16px; width: 100%; box-sizing: border-box; margin-left: 30px; padding-right: 325px;">
+                                    <div style="font-weight:700; font-size:15px; margin-bottom: 8px; color: var(--text); letter-spacing:0.2px;">PID Tuning</div>
+                                    <div style="display: grid; grid-template-columns: 60px 1fr 1fr 1fr; gap: 6px 10px; align-items: center; width:100%;">
+                                        <div></div>
+                                        <div style="text-align:center; font-size:13px; color:var(--muted);">kP</div>
+                                        <div style="text-align:center; font-size:13px; color:var(--muted);">kI</div>
+                                        <div style="text-align:center; font-size:13px; color:var(--muted);">kD</div>
+                                        <div style="font-size:13px; color:var(--text);">Drive</div>
+                                        <input id="drive-kp-input" type="number" step="0.01" value="0.8" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
+                                        <input id="drive-ki-input" type="number" step="0.001" value="0.0" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
+                                        <input id="drive-kd-input" type="number" step="0.01" value="0.1" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
+                                        <div style="font-size:13px; color:var(--text);">Turn</div>
+                                        <input id="turn-kp-input" type="number" step="0.01" value="0.7" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
+                                        <input id="turn-ki-input" type="number" step="0.001" value="0.0" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
+                                        <input id="turn-kd-input" type="number" step="0.01" value="0.12" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px 24px; margin-bottom: 8px; width:100%; position: relative;">
+                                    <div class="field-group" style="width:100%; position: relative; left: -1090px; top: -10px; display: flex; align-items: center; gap: 8px;">
+                                        <label for="weight-input" style="white-space: nowrap; position: relative; left: -7px;">Robot Weight (lbs)</label>
+                                        <input id="weight-input" type="number" step="0.1" value="18" style="flex:1; min-width:0; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:13px;" />
+                                    </div>
+                                    <div class="field-group" style="width:100%; position: relative; left: -1075px; top: -10px; display: flex; align-items: center; gap: 8px;">
+                                        <label for="rpm-input" style="white-space: nowrap; position: relative; left: -7px;">Drivetrain RPM</label>
+                                        <input id="rpm-input" type="number" step="1" value="200" style="flex:1; min-width:0; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:13px;" />
+                                    </div>
+                                    <div class="field-group" style="width:100%; position: relative; left: -1060px; top: -10px; display: flex; align-items: center; gap: 8px;">
+                                        <label for="imu-offset" style="white-space: nowrap; position: relative; left: -7px;">IMU Offset (in)</label>
+                                        <input type="number" id="imu-offset" value="0" step="0.25" min="-12" max="12" title="Distance from robot center to IMU (forward is positive)" style="flex:1; min-width:0; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:13px;" />
+                                    </div>
+                                </div>
+                <div class="field-group" style="align-self: center; position: relative; left: -900px; top: 40px;">
+                    <input type="checkbox" id="show-waypoints" checked style="align-self: center; position: relative; left: -30px; top: 20px;">
+                    <label style="display: flex; gap: 8px; align-items: center; color: var(--text); font-weight: 1000; font-size: 25px; position: relative; left: 60px; top: -12px; text-wrap: nowrap;">Show Waypoints</label>
                 </div>
             </div>
             <div class="button-row" style="margin-top: 12px;">
@@ -725,10 +747,7 @@
         }
 
         function setWaypointSpeed(idx, speedIn) {
-            if (!pathPoints[idx]) return;
-            pathPoints[idx].speed = Math.max(0.1, parseFloat(speedIn) || 24);
-            renderWaypoints();
-            updateDataDisplay();
+            // Speed per waypoint is now disabled; do nothing
         }
 
         function reverseWaypoint(idx) {
@@ -1000,7 +1019,6 @@
                     item.classList.add('highlighted');
                 }
                 const delay = (p.delay || 0) / 1000; // Convert ms back to seconds for display
-                const speed = p.speed || 24;
                 const isReversed = p.reverse || false;
                 const imuDistInfo = imuOffset !== 0 ? `<div style="color: rgba(255, 174, 94, 0.9); font-size: 10px;">IMU dist: ${segIMULen.toFixed(2)} in | Total IMU: ${runningIMULen.toFixed(2)} in</div>` : '';
                 item.innerHTML = `
@@ -1009,10 +1027,6 @@
                     <div>Total to here: ${runningLen.toFixed(2)} in</div>
                     ${imuDistInfo}
                     <div class="waypoint-item-angle">${isReversed ? '⬅' : '→'} Angle: ${Math.round(angleForDisplay)}°${isReversed ? ' (reversed)' : ''}</div>
-                    <div class="delay-input-container">
-                        <label>Speed (in/s):</label>
-                        <input type="number" value="${speed}" min="0.1" step="0.5" onchange="setWaypointSpeed(${idx}, this.value)">
-                    </div>
                     <div class="delay-input-container">
                         <label>Delay (sec):</label>
                         <input type="number" value="${delay.toFixed(1)}" min="0" step="0.1" onchange="setWaypointDelay(${idx}, this.value)">
@@ -1561,6 +1575,7 @@
         let segmentEnd = null;
         let progress = 0; // 0..1 along segment
         let speedPxPerS = 100; // default: 2 ft/s -> 100 px/s
+            // Physics-based velocity calculation
         let delayEndTime = null; // for waypoint delays
         let waypointReachedTime = null; // track when waypoint was reached
         let timerStartTime = null; // for match/skills timer
@@ -1597,8 +1612,16 @@
 
         function startRun() {
             if (pathPoints.length === 0) return;
-            const speedIn = parseFloat(document.getElementById('speed-input-ft').value) || 24;
-            speedPxPerS = speedIn * PX_PER_IN;
+            // Calculate real-life max velocity based on drivetrain RPM and wheel size
+            const rpm = parseFloat(document.getElementById('rpm-input').value) || 200;
+            const weight = parseFloat(document.getElementById('weight-input').value) || 18;
+            // Assume 4" wheels (VEX standard), 1 rev = 4 * pi inches
+            const wheelDiameterIn = 4;
+            const wheelCircumferenceIn = wheelDiameterIn * Math.PI;
+            const maxInchesPerSec = (rpm * wheelCircumferenceIn) / 60;
+            // Simulate effect of weight: heavier robots accelerate slower (simple model)
+            // For now, just use max velocity, but could add acceleration curve
+            speedPxPerS = maxInchesPerSec * PX_PER_IN;
             isRunning = true;
             currentSegment = 0;
             // Start from current robot position (from input values)
@@ -1643,20 +1666,16 @@
         function runStep(prevTs) {
             runRAF = requestAnimationFrame((ts) => {
                 if (!isRunning) return;
-                
                 // Handle waypoint delay
                 if (waypointReachedTime !== null) {
                     const elapsedDelay = ts - waypointReachedTime;
                     const waypoint = pathPoints[currentSegment];
                     const delay = waypoint.delay || 0;
-                    
                     if (elapsedDelay < delay) {
-                        // Still waiting at waypoint
-                        updateTimerDisplay(); // Keep timer running during delay
+                        updateTimerDisplay();
                         runStep(prevTs);
                         return;
                     } else {
-                        // Delay finished, move to next segment
                         waypointReachedTime = null;
                         currentSegment += 1;
                         if (currentSegment >= pathPoints.length) {
@@ -1666,62 +1685,103 @@
                         segmentStart = pathPoints[currentSegment - 1];
                         segmentEnd = { x: pathPoints[currentSegment].x, y: pathPoints[currentSegment].y };
                         progress = 0;
-                        prevTs = ts; // Update timestamp to prevent jump
+                        prevTs = ts;
                     }
                 }
-                
-                const dt = (ts - prevTs) / 1000; // seconds
+                const dt = (ts - prevTs) / 1000;
                 prevTs = ts;
                 const dx = segmentEnd.x - segmentStart.x;
                 const dy = segmentEnd.y - segmentStart.y;
                 const segLen = Math.hypot(dx, dy);
-                
-                // Use waypoint-specific speed if available, otherwise use default
-                const waypoint = pathPoints[currentSegment];
-                const waypointSpeed = waypoint && waypoint.speed ? waypoint.speed : 24; // default 24 in/s
-                const segmentSpeedPxPerS = waypointSpeed * PX_PER_IN;
-                
-                const advance = (segmentSpeedPxPerS * dt) / segLen;
-                progress = Math.min(1, progress + advance);
-                const cx = segmentStart.x + dx * progress;
-                const cy = segmentStart.y + dy * progress;
-                // Calculate angle relative to robot's input heading
-                const angleDeg = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
-                
-                const isReversed = waypoint && waypoint.reverse;
-                const cssHeading = (angleDeg + 90) % 360;
+                // --- PID Simulation ---
+                // Get PID values
+                const drive_kP = parseFloat(document.getElementById('drive-kp-input').value) || 0.8;
+                const drive_kI = parseFloat(document.getElementById('drive-ki-input').value) || 0.0;
+                const drive_kD = parseFloat(document.getElementById('drive-kd-input').value) || 0.1;
+                const turn_kP = parseFloat(document.getElementById('turn-kp-input').value) || 0.7;
+                const turn_kI = parseFloat(document.getElementById('turn-ki-input').value) || 0.0;
+                const turn_kD = parseFloat(document.getElementById('turn-kd-input').value) || 0.12;
 
+                // State for PID (static across calls)
+                if (!runStep.drivePID) runStep.drivePID = { integral: 0, prevError: 0 };
+                if (!runStep.turnPID) runStep.turnPID = { integral: 0, prevError: 0 };
+
+                // Current robot position and heading
+                let cx = segmentStart.x + (dx * progress);
+                let cy = segmentStart.y + (dy * progress);
+                let currentHeading = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--robot-heading')) || 0;
+                // Target position and heading
+                const tx = segmentEnd.x;
+                const ty = segmentEnd.y;
+                const targetAngle = ((Math.atan2(ty - cy, tx - cx) * 180) / Math.PI + 360) % 360;
+                // Distance error
+                const distError = Math.hypot(tx - cx, ty - cy);
+                // Heading error (shortest path)
+                let headingError = targetAngle - currentHeading;
+                while (headingError > 180) headingError -= 360;
+                while (headingError < -180) headingError += 360;
+
+                // --- Drive PID ---
+                runStep.drivePID.integral += distError * dt;
+                const driveDerivative = (distError - runStep.drivePID.prevError) / dt;
+                const driveOutput = drive_kP * distError + drive_kI * runStep.drivePID.integral + drive_kD * driveDerivative;
+                runStep.drivePID.prevError = distError;
+
+                // --- Turn PID ---
+                runStep.turnPID.integral += headingError * dt;
+                const turnDerivative = (headingError - runStep.turnPID.prevError) / dt;
+                const turnOutput = turn_kP * headingError + turn_kI * runStep.turnPID.integral + turn_kD * turnDerivative;
+                runStep.turnPID.prevError = headingError;
+
+                // Clamp outputs (simulate max power)
+                const maxDrive = speedPxPerS * dt;
+                const maxTurn = 10 * dt; // max 10 deg per frame (tunable)
+                const driveStep = Math.max(-maxDrive, Math.min(maxDrive, driveOutput));
+                const turnStep = Math.max(-maxTurn, Math.min(maxTurn, turnOutput));
+
+                // Move robot
+                if (Math.abs(headingError) > 2) {
+                    // Prioritize turning if heading error is large
+                    currentHeading += turnStep;
+                } else {
+                    // Drive forward with heading correction
+                    const moveAngle = (currentHeading - 90) * Math.PI / 180;
+                    cx += driveStep * Math.cos(moveAngle);
+                    cy += driveStep * Math.sin(moveAngle);
+                    currentHeading += turnStep;
+                }
+
+                // Update progress based on distance to target
+                const newDist = Math.hypot(tx - cx, ty - cy);
+                progress = 1 - (newDist / segLen);
+                progress = Math.max(0, Math.min(1, progress));
+
+                // Update robot CSS
                 document.documentElement.style.setProperty('--robot-x', cx + 'px');
                 document.documentElement.style.setProperty('--robot-y', cy + 'px');
-                document.documentElement.style.setProperty('--robot-heading', cssHeading + 'deg');
-                
-                // Update timer display
+                document.documentElement.style.setProperty('--robot-heading', ((currentHeading + 360) % 360) + 'deg');
                 updateTimerDisplay();
-                
-                // Flip arrow for reversed waypoints
+                const waypoint = pathPoints[currentSegment];
+                const isReversed = waypoint && waypoint.reverse;
                 const arrow = document.getElementById('front-arrow');
                 if (isReversed) {
                     arrow.classList.add('reversed');
                 } else {
                     arrow.classList.remove('reversed');
                 }
-
                 if (progress >= 1) {
-                    // Reached waypoint, check for delay
                     const waypoint = pathPoints[currentSegment];
                     const delay = waypoint.delay || 0;
-                    
+                    // Reset PID for next segment
+                    runStep.drivePID = { integral: 0, prevError: 0 };
+                    runStep.turnPID = { integral: 0, prevError: 0 };
                     if (delay > 0) {
-                        // Start delay at this waypoint
                         waypointReachedTime = ts;
                         runStep(prevTs);
                         return;
                     }
-                    
-                    // Move to next segment
                     currentSegment += 1;
                     if (currentSegment >= pathPoints.length) {
-                        // Finished
                         isRunning = false;
                         return;
                     } else {
@@ -1730,7 +1790,6 @@
                         progress = 0;
                     }
                 }
-
                 runStep(prevTs);
             });
         }
