@@ -257,10 +257,16 @@
             left: 50%;
             width: 18px;
             height: 26px;
+            /* Arrow inherits rotation from the robot body (no extra rotate here).
+               The arrow element is positioned in the center and will point
+               in the robot's forward direction because the parent `.robot-body`
+               applies the `--robot-heading` transform. */
             transform: translate(-50%, -50%);
             cursor: grab;
         }
         .robot-front-arrow.reversed {
+            /* When driving reversed, flip the arrow 180deg so it points backwards
+               relative to the robot body. */
             transform: translate(-50%, -50%) rotate(180deg);
         }
         .robot-front-arrow::before {
@@ -373,6 +379,29 @@
         .waypoint.highlighted { border-color: rgba(255, 200, 0, 1); background: rgba(255, 200, 0, 0.5); box-shadow: 0 0 15px rgba(255, 200, 0, 0.8); }
         .waypoint-item-number { color: var(--accent); font-weight: 700; margin-bottom: 5px; }
         .waypoint-item-angle { color: rgba(255, 174, 94, 0.9); margin-top: 5px; font-size: 10px; }
+        .waypoint-item-angle input[type="number"] {
+            width: 72px;
+            padding: 6px 8px;
+            margin-left: 6px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #0f1a28;
+            color: var(--text);
+            font-weight: 700;
+            font-size: 12px;
+            text-align: right;
+            box-sizing: border-box;
+        }
+        .waypoint-item-angle input[type="number"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(39,160,111,0.06);
+        }
+        .waypoint-item-angle input[type="number"]::-webkit-outer-spin-button,
+        .waypoint-item-angle input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
         .modal-overlay {
             display: none;
             position: fixed;
@@ -519,6 +548,21 @@
         footer p {
             margin: 2px 0;
         }
+        /* Debug overlay (visible during development) */
+        #debug-overlay {
+            position: fixed;
+            right: 12px;
+            bottom: 12px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            z-index: 9999;
+            max-width: 300px;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -530,63 +574,41 @@
 
         <div class="control-slab">
             <div class="controls">
-                <div class="field-group" style="position: relative; top: -90px;">
-                    <label style="white-space: nowrap; position: relative; left: 7px;">X (in)</label>
+                <div class="field-group">
+                    <label>X (in)</label>
                     <input type="number" id="x-input-ft" value="27.7" step="1" min="0" max="144">
                 </div>
-                <div class="field-group" style="position: relative; top: -90px;">
-                    <label style="white-space: nowrap; position: relative; left: 7px;">Y (in)</label>
+                <div class="field-group">
+                    <label>Y (in)</label>
                     <input type="number" id="y-input-ft" value="88.5" step="1" min="0" max="144">
                 </div>
-                <div class="field-group" style="position: relative; top: -90px;">
-                    <label style="white-space: nowrap; position: relative; left: 7px;">Heading (°)</label>
+                <div class="field-group">
+                    <label>Heading (°)</label>
                     <input type="number" id="heading-input" value="0" min="0" max="360" step="1">
                 </div>
-                <div class="field-group" style="align-self: flex-end; position: relative; top: -90px;">
+                <div class="field-group" style="align-self: flex-end;">
                     <button class="secondary" onclick="rotate180()" style="padding: 10px; margin: 0;">Rotate 180°</button>
                 </div>
-                <div class="field-group" style="position: relative; top: -90px;">
-                    <label style="white-space: nowrap; position: relative; left: 7px;">Width (in)</label>
+                <div class="field-group">
+                    <label>Width (in)</label>
                     <input type="number" id="size-width-in" value="15" step="0.5" min="5" max="48">
                 </div>
-                <div class="field-group" style="position: relative; top: -90px;">
-                    <label style="white-space: nowrap; position: relative; left: 7px;">Height (in)</label>
+                <div class="field-group">
+                    <label>Height (in)</label>
                     <input type="number" id="size-height-in" value="15" step="0.5" min="5" max="48">
                 </div>
-                                <div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px 2px 16px; width: 100%; box-sizing: border-box; margin-left: 30px; padding-right: 325px;">
-                                    <div style="font-weight:700; font-size:15px; margin-bottom: 8px; color: var(--text); letter-spacing:0.2px;">PID Tuning</div>
-                                    <div style="display: grid; grid-template-columns: 60px 1fr 1fr 1fr; gap: 6px 10px; align-items: center; width:100%;">
-                                        <div></div>
-                                        <div style="text-align:center; font-size:13px; color:var(--muted);">kP</div>
-                                        <div style="text-align:center; font-size:13px; color:var(--muted);">kI</div>
-                                        <div style="text-align:center; font-size:13px; color:var(--muted);">kD</div>
-                                        <div style="font-size:13px; color:var(--text);">Drive</div>
-                                        <input id="drive-kp-input" type="number" step="0.01" value="0.8" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
-                                        <input id="drive-ki-input" type="number" step="0.001" value="0.0" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
-                                        <input id="drive-kd-input" type="number" step="0.01" value="0.1" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
-                                        <div style="font-size:13px; color:var(--text);">Turn</div>
-                                        <input id="turn-kp-input" type="number" step="0.01" value="0.7" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
-                                        <input id="turn-ki-input" type="number" step="0.001" value="0.0" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
-                                        <input id="turn-kd-input" type="number" step="0.01" value="0.12" style="width:100%; min-width:48px; max-width:80px; padding:6px 8px; font-size:13px; text-align:center; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--text);" />
-                                    </div>
-                                </div>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px 24px; margin-bottom: 8px; width:100%; position: relative;">
-                                    <div class="field-group" style="width:100%; position: relative; left: -1090px; top: -10px; display: flex; align-items: center; gap: 8px;">
-                                        <label for="weight-input" style="white-space: nowrap; position: relative; left: -7px;">Robot Weight (lbs)</label>
-                                        <input id="weight-input" type="number" step="0.1" value="18" style="flex:1; min-width:0; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:13px;" />
-                                    </div>
-                                    <div class="field-group" style="width:100%; position: relative; left: -1075px; top: -10px; display: flex; align-items: center; gap: 8px;">
-                                        <label for="rpm-input" style="white-space: nowrap; position: relative; left: -7px;">Drivetrain RPM</label>
-                                        <input id="rpm-input" type="number" step="1" value="200" style="flex:1; min-width:0; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:13px;" />
-                                    </div>
-                                    <div class="field-group" style="width:100%; position: relative; left: -1060px; top: -10px; display: flex; align-items: center; gap: 8px;">
-                                        <label for="imu-offset" style="white-space: nowrap; position: relative; left: -7px;">IMU Offset (in)</label>
-                                        <input type="number" id="imu-offset" value="0" step="0.25" min="-12" max="12" title="Distance from robot center to IMU (forward is positive)" style="flex:1; min-width:0; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:13px;" />
-                                    </div>
-                                </div>
-                <div class="field-group" style="align-self: center; position: relative; left: -900px; top: 40px;">
-                    <input type="checkbox" id="show-waypoints" checked style="align-self: center; position: relative; left: -30px; top: 20px;">
-                    <label style="display: flex; gap: 8px; align-items: center; color: var(--text); font-weight: 1000; font-size: 25px; position: relative; left: 60px; top: -12px; text-wrap: nowrap;">Show Waypoints</label>
+                <div class="field-group">
+                    <label>Speed (in/s)</label>
+                    <input type="number" id="speed-input-ft" value="10" step="0.5" min="3" max="120">
+                </div>
+                <div class="field-group">
+                    <label>IMU Offset (in)</label>
+                    <input type="number" id="imu-offset" value="0" step="0.25" min="-12" max="12" title="Distance from robot center to IMU (forward is positive)">
+                </div>
+                <div class="field-group" style="align-self: center;">
+                    <label style="display: flex; gap: 8px; align-items: center; color: var(--text); font-weight: 600;">
+                        <input type="checkbox" id="show-waypoints" checked> Show waypoints
+                    </label>
                 </div>
             </div>
             <div class="button-row" style="margin-top: 12px;">
@@ -654,6 +676,9 @@
         </footer>
     </div>
 
+    <!-- Debug overlay for development: shows computed headings and angles -->
+    <div id="debug-overlay" aria-hidden="false">Debug overlay</div>
+
     <!-- Code Display Modal -->
     <div class="modal-overlay" id="code-modal">
         <div class="modal">
@@ -667,12 +692,21 @@
     </div>
 
     <script>
+        /*
+         Main application script for VEX Path Studio.
+         - Manages field rendering, waypoint creation and editing
+         - Draws paths and renders them on a canvas overlay
+         - Generates C++ path code, exports/imports JSON presets
+         - Provides simple run/playback visualization of paths
+        */
         const field = document.getElementById('match_field');
         const canvas = document.getElementById('path-canvas');
         const ctx = canvas.getContext('2d');
         const waypointOverlay = document.getElementById('waypoint-overlay');
         const FIELD_IMAGES = { match: './vex_match_field.png', skills: './vex_skills_field.jpg' };
         let fieldMode = 'skills';
+        // Normalize an angle (degrees) into the range [-180, 180].
+        // This is used to compare headings in a consistent representation.
         const normalizeHeading = (h) => {
             const n = ((h % 360) + 360) % 360;
             return n > 180 ? n - 360 : n;
@@ -746,8 +780,96 @@
             updateDataDisplay();
         }
 
+        function setWaypointAngle(idx, ang) {
+            if (!pathPoints[idx]) return;
+            if (ang === '' || ang === null) {
+                delete pathPoints[idx].angleOverride;
+            } else {
+                const v = Number(parseFloat(ang));
+                if (!Number.isNaN(v)) {
+                    // Store as relative turn (degrees) to one decimal place
+                    pathPoints[idx].angleOverride = Number(v.toFixed(1));
+                }
+            }
+            // If angle override is set, adjust the previous waypoint position so
+            // the segment heading from previous -> current matches the override.
+            if (pathPoints[idx] && pathPoints[idx].angleOverride !== undefined) {
+                const override = Number(pathPoints[idx].angleOverride);
+                const cur = pathPoints[idx];
+                const prevIndex = idx - 1;
+                // Get prev point (or lastRobotPos if this is the first waypoint)
+                const prev = prevIndex >= 0 ? pathPoints[prevIndex] : { x: lastRobotPos.x, y: lastRobotPos.y };
+
+                // Determine how to adjust the previous waypoint.
+                // Keep prevPrev fixed. Move prev along the line defined by prevPrev->prev
+                // (preserve its bearing) so that the segment prev->cur achieves the
+                // desired overridden heading. The second waypoint (cur) remains fixed.
+                const wrapAngle = (a) => ((a + 540) % 360) - 180;
+                const prevPrev = prevIndex - 1 >= 0 ? pathPoints[prevIndex - 1] : lastRobotPos;
+
+                // Unit vector along prevPrev -> prev (direction to preserve)
+                let ux = prev.x - prevPrev.x;
+                let uy = prev.y - prevPrev.y;
+                let ul = Math.hypot(ux, uy);
+                if (ul < 1e-6) {
+                    // If length is zero, default to the robot heading direction
+                    const baseHeading = prevIndex - 1 >= 0 ? normalizeHeading(parseFloat(document.getElementById('heading-input').value) || 0) : normalizeHeading(parseFloat(document.getElementById('heading-input').value) || 0);
+                    const baseRaw = (baseHeading - 90) * (Math.PI / 180);
+                    ux = Math.cos(baseRaw); uy = Math.sin(baseRaw); ul = 1;
+                } else {
+                    ux /= ul; uy /= ul;
+                }
+
+                // Desired absolute heading for prev->cur (robot-heading convention)
+                let prevHeading = 0;
+                if (prevIndex - 1 >= 0) {
+                    // compute heading from prevPrev -> prev in robot-heading convention
+                    let anglePP = Math.atan2(prev.y - prevPrev.y, prev.x - prevPrev.x) * (180 / Math.PI);
+                    anglePP = (anglePP + 360) % 360;
+                    const displayAnglePP = ((anglePP - 180 + 360) % 360);
+                    prevHeading = wrapAngle(displayAnglePP > 180 ? displayAnglePP - 360 : displayAnglePP + 0);
+                } else {
+                    prevHeading = normalizeHeading(parseFloat(document.getElementById('heading-input').value) || 0);
+                }
+                const desiredAbsolute = wrapAngle(prevHeading + override);
+
+                // Unit vector r for desired segment direction (raw atan2 space)
+                const rawAngle = (desiredAbsolute - 90) * (Math.PI / 180);
+                const rx = Math.cos(rawAngle), ry = Math.sin(rawAngle);
+
+                // Preserve the straight-line distance between prev and cur.
+                // Let segLen = |cur - prev|. We want newPrev on the ray prevPrev + t*u
+                // (u is unit vector along prevPrev->prev) such that cur - newPrev = segLen * r.
+                // Solve t = dot( (cur - prevPrev) - segLen*r, u ).
+                const segLen = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+                const bx = cur.x - prevPrev.x;
+                const by = cur.y - prevPrev.y;
+                const t = (bx - segLen * rx) * ux + (by - segLen * ry) * uy; // u is unit
+                const newPrevX = prevPrev.x + t * ux;
+                const newPrevY = prevPrev.y + t * uy;
+
+                if (prevIndex >= 0) {
+                    if (prevIndex >= 1) {
+                        pathPoints[prevIndex].x = newPrevX;
+                        pathPoints[prevIndex].y = newPrevY;
+                    } else {
+                        // prev is the first waypoint: move the first waypoint along its ray
+                        pathPoints[0].x = newPrevX;
+                        pathPoints[0].y = newPrevY;
+                    }
+                }
+            }
+
+            renderWaypoints();
+            redrawPath();
+            updateDataDisplay();
+        }
+
         function setWaypointSpeed(idx, speedIn) {
-            // Speed per waypoint is now disabled; do nothing
+            if (!pathPoints[idx]) return;
+            pathPoints[idx].speed = Math.max(0.1, parseFloat(speedIn) || 24);
+            renderWaypoints();
+            updateDataDisplay();
         }
 
         function reverseWaypoint(idx) {
@@ -767,39 +889,45 @@
             updateDataDisplay();
         }
 
-        function rotate180() {
-            const headingInput = document.getElementById('heading-input');
-            let currentHeading = parseFloat(headingInput.value);
-            let newHeading = (currentHeading + 180) % 360;
-            headingInput.value = newHeading.toString();
-            updateRobot();
-        }
-
+        // Update robot visual position, heading, and size from the input fields.
         function updateRobot() {
-            const xIn = parseFloat(document.getElementById('x-input-ft').value);
-            const yIn = parseFloat(document.getElementById('y-input-ft').value);
-            const heading = parseFloat(document.getElementById('heading-input').value);
-            const sizeWIn = parseFloat(document.getElementById('size-width-in').value);
-            const sizeHIn = parseFloat(document.getElementById('size-height-in').value);
+            const xIn = parseFloat(document.getElementById('x-input-ft').value) || 0;
+            const yIn = parseFloat(document.getElementById('y-input-ft').value) || 0;
+            const heading = parseFloat(document.getElementById('heading-input').value) || 0;
+            const sizeWIn = parseFloat(document.getElementById('size-width-in').value) || 12;
+            const sizeHIn = parseFloat(document.getElementById('size-height-in').value) || 12;
 
             const x = inToPx(xIn);
             const y = inToPx(yIn);
-            const sizeW = inToPx(sizeWIn);
-            const sizeH = inToPx(sizeHIn);
-
-            document.documentElement.style.setProperty('--robot-x', x + 'px');
-            document.documentElement.style.setProperty('--robot-y', y + 'px');
-            const cssHeading = (heading + HEADING_ZERO_OFFSET) % 360;
-            document.documentElement.style.setProperty('--robot-heading', cssHeading + 'deg');
-            document.documentElement.style.setProperty('--square-width', sizeW + 'px');
-            document.documentElement.style.setProperty('--square-height', sizeH + 'px');
 
             lastRobotPos = { x, y, heading };
 
-            // Store in history
+            // Convert to CSS-friendly values and apply
+            const cssHeading = (heading + HEADING_ZERO_OFFSET) % 360;
+            document.documentElement.style.setProperty('--robot-x', x + 'px');
+            document.documentElement.style.setProperty('--robot-y', y + 'px');
+            document.documentElement.style.setProperty('--robot-heading', cssHeading + 'deg');
+
+            const sizeW = Math.max(8, sizeWIn) * PX_PER_IN; // ensure sensible min size
+            const sizeH = Math.max(8, sizeHIn) * PX_PER_IN;
+            document.documentElement.style.setProperty('--square-width', sizeW + 'px');
+            document.documentElement.style.setProperty('--square-height', sizeH + 'px');
+
+            // Record history entry
             const entry = { x: xIn, y: yIn, heading, sizeW: sizeWIn, sizeH: sizeHIn };
             robotHistory.push(entry);
             updateDataDisplay();
+
+            // Update debug overlay
+            const dbg = document.getElementById('debug-overlay');
+            if (dbg) dbg.textContent = `inputHeading: ${heading}\nHEADING_ZERO_OFFSET: ${HEADING_ZERO_OFFSET}\ncssHeading: ${cssHeading.toFixed(2)}`;
+        }
+
+        function rotate180() {
+            let heading = parseFloat(document.getElementById('heading-input').value) || 0;
+            heading = (heading + 180) % 360;
+            document.getElementById('heading-input').value = Math.round(heading);
+            updateRobot();
         }
 
         function updateDataDisplay() {
@@ -980,12 +1108,15 @@
 
             let runningLen = 0;
             let runningIMULen = 0;
+            // IMU offset (inches) used when computing arc distances for IMU-based travel
             const imuOffset = parseFloat(document.getElementById('imu-offset').value) || 0;
+            // Robot input heading is treated as the zero-reference for displayed angles
             const robotHeading = normalizeHeading(parseFloat(document.getElementById('heading-input').value) || 0);
-            // Calculate angles relative to robot heading (input heading is zero reference)
+            // Track previous segment heading for relative-turn calculations; initialize to robot heading
             let prevHeading = robotHeading;
             let prevHeadingForImu = robotHeading; // Track heading for IMU arc calculation
-            const wrapAngle = (a) => ((a + 540) % 360) - 180; // wrap to [-180,180]
+            // Helper: wrap angles into [-180, 180]
+            const wrapAngle = (a) => ((a + 540) % 360) - 180;
             pathPoints.forEach((p, idx) => {
                 const prev = idx === 0 ? lastRobotPos : pathPoints[idx - 1];
                 const dx = p.x - prev.x;
@@ -994,18 +1125,26 @@
                 angle = (angle + 360) % 360;
                 const displayAngle = ((angle - 180 + 360) % 360);
                 const normalizedAngle = displayAngle > 180 ? displayAngle - 360 : displayAngle;
-                // Shift by +90° (updated alignment with robot heading convention)
+                // Shift by +90° to align the segment direction with the robot-heading convention
                 const headingAdjusted = wrapAngle(normalizedAngle + 90);
-                // Relative turn from robot heading (robot heading is now zero reference)
-                const relativeAngle = wrapAngle(headingAdjusted - prevHeading);
-                // If essentially straight, show the current heading instead of a tiny turn
-                const angleForDisplay = Math.abs(relativeAngle) < 1 ? normalizeHeading(prevHeading) : relativeAngle;
-                prevHeading = headingAdjusted;
+                // Determine absolute segment heading (allow per-waypoint override)
+                let absoluteHeading = headingAdjusted;
+                if (p.angleOverride !== undefined) {
+                    absoluteHeading = wrapAngle(prevHeading + Number(p.angleOverride));
+                }
+
+                // Relative turn from the previous segment heading
+                const relativeAngle = wrapAngle(absoluteHeading - prevHeading);
+
+                // Use the exact relative angle (no thresholds). Display precise
+                // values to one decimal place elsewhere.
+                let angleForDisplay = relativeAngle;
+                // Update previous-heading tracker to the absolute heading we used
+                prevHeading = absoluteHeading;
                 const segLen = parseFloat(segmentLengthIn(p, prev));
-                runningLen += segLen;
-                
+
                 // Calculate IMU distance (accounts for arc during turns)
-                const currentHeadingForImu = headingAdjusted;
+                const currentHeadingForImu = absoluteHeading;
                 let turnAngle = ((currentHeadingForImu - prevHeadingForImu + 540) % 360) - 180;
                 const turnRad = turnAngle * (Math.PI / 180);
                 const arcDistance = Math.abs(imuOffset * turnRad);
@@ -1013,20 +1152,47 @@
                 runningIMULen += segIMULen;
                 prevHeadingForImu = currentHeadingForImu;
 
+                // If waypoint angle is overridden, account for IMU arc distance
+                // so the displayed segment length reflects the traveled distance.
+                const segDisplayLen = (p.angleOverride !== undefined) ? segIMULen : segLen;
+                runningLen += segDisplayLen;
+
                 const item = document.createElement('div');
                 item.className = 'waypoint-item';
                 if (highlightedWaypoint === idx) {
                     item.classList.add('highlighted');
                 }
                 const delay = (p.delay || 0) / 1000; // Convert ms back to seconds for display
+                const speed = p.speed || 24;
                 const isReversed = p.reverse || false;
                 const imuDistInfo = imuOffset !== 0 ? `<div style="color: rgba(255, 174, 94, 0.9); font-size: 10px;">IMU dist: ${segIMULen.toFixed(2)} in | Total IMU: ${runningIMULen.toFixed(2)} in</div>` : '';
+                // Prepare angle display with exact one-decimal formatting and
+                // normalize negative-zero to positive zero so UI shows `0.0`.
+                const rawAngleValue = angleForDisplay;
+                let angleDisplayNum = Number(rawAngleValue);
+                angleDisplayNum = Number(angleDisplayNum.toFixed(1));
+                if (Object.is(angleDisplayNum, -0)) angleDisplayNum = 0;
+                // If this waypoint has an explicit angle override (relative turn), show that instead
+                if (p.angleOverride !== undefined) {
+                    angleDisplayNum = Number(p.angleOverride.toFixed(1));
+                }
+                const angleDisplayStr = angleDisplayNum.toFixed(1);
+
                 item.innerHTML = `
                     <div class="waypoint-item-number">#${idx + 1}${isReversed ? ' ⬅' : ''}</div>
-                    <div>Segment: ${segLen.toFixed(2)} in</div>
+                    <div>Segment: ${segDisplayLen.toFixed(2)} in${p.angleOverride !== undefined ? ' (adjusted)' : ''}</div>
                     <div>Total to here: ${runningLen.toFixed(2)} in</div>
                     ${imuDistInfo}
-                    <div class="waypoint-item-angle">${isReversed ? '⬅' : '→'} Angle: ${Math.round(angleForDisplay)}°${isReversed ? ' (reversed)' : ''}</div>
+                    <div class="waypoint-item-angle">
+                        ${isReversed ? '⬅' : '→'} Angle:
+                        <input type="number" value="${angleDisplayStr}" min="-180" max="180" step="0.1" onchange="setWaypointAngle(${idx}, this.value)" style="width:72px; margin-left:6px;">
+                        ${isReversed ? ' (reversed)' : ''}
+                        ${p.angleOverride !== undefined ? '<span style="color: rgba(255,174,94,0.9); margin-left:8px; font-size:10px;">(overridden)</span>' : ''}
+                    </div>
+                    <div class="delay-input-container">
+                        <label>Speed (in/s):</label>
+                        <input type="number" value="${speed}" min="0.1" step="0.5" onchange="setWaypointSpeed(${idx}, this.value)">
+                    </div>
                     <div class="delay-input-container">
                         <label>Delay (sec):</label>
                         <input type="number" value="${delay.toFixed(1)}" min="0" step="0.1" onchange="setWaypointDelay(${idx}, this.value)">
@@ -1123,29 +1289,21 @@
         }
 
         function clearPath() {
-            if (pathPoints.length > 0) {
-                // Update robot position to the last point before clearing
-                const lastPoint = pathPoints[pathPoints.length - 1];
-                lastRobotPos = { x: lastPoint.x, y: lastPoint.y, heading: lastRobotPos.heading };
-                // Update input fields to match
-                document.getElementById('x-input-ft').value = pxToIn(lastPoint.x);
-                document.getElementById('y-input-ft').value = pxToIn(lastPoint.y);
-                updateRobot();
-            }
+            // Clear current path and reset any highlights
             pathPoints = [];
             highlightedWaypoint = null;
             if (highlightedPath && highlightedPath.type === 'current') {
                 highlightedPath = null;
             }
-            
-            // If no saved paths exist, reset to original robot position
-            if (savedPaths.length === 0) {
-                const xIn = parseFloat(document.getElementById('x-input-ft').value);
-                const yIn = parseFloat(document.getElementById('y-input-ft').value);
-                const heading = parseFloat(document.getElementById('heading-input').value);
-                lastRobotPos = { x: inToPx(xIn), y: inToPx(yIn), heading: heading };
-            }
-            
+
+            // Reset robot position to the input-defined start position
+            const xIn = parseFloat(document.getElementById('x-input-ft').value) || 0;
+            const yIn = parseFloat(document.getElementById('y-input-ft').value) || 0;
+            const heading = parseFloat(document.getElementById('heading-input').value) || 0;
+            lastRobotPos = { x: inToPx(xIn), y: inToPx(yIn), heading };
+
+            // Also reset any running playback/timer when clearing the current path
+            if (typeof resetRun === 'function') resetRun();
             redrawPath();
             renderWaypoints();
             updateDataDisplay();
@@ -1214,21 +1372,25 @@
                     const distance = Math.sqrt(dx * dx + dy * dy) / PX_PER_IN;
 
                     // Heading (+90 shift) relative to robot input heading
-                    let targetHeading = Math.atan2(dy, dx) * (180 / Math.PI);
-                    targetHeading = ((targetHeading + 90 + 360) % 360);
-                    if (targetHeading > 180) targetHeading -= 360;
+                    // If the waypoint has an explicit relative-angle override, use that
+                    let targetHeading;
+                    if (typeof target.angleOverride === 'number') {
+                        // target.angleOverride is a relative turn from the previous heading
+                        targetHeading = normalizeHeading(currentHeading + target.angleOverride);
+                    } else {
+                        targetHeading = Math.atan2(dy, dx) * (180 / Math.PI);
+                        targetHeading = ((targetHeading + 90 + 360) % 360);
+                        if (targetHeading > 180) targetHeading -= 360;
+                    }
 
                     // Raw heading (no +90) to match UI IMU distance calc
                     const headingRaw = normalizeHeading(Math.atan2(dy, dx) * (180 / Math.PI));
 
-                    // Calculate turn needed (robot heading is the zero reference)
+                    // Calculate turn needed (robot heading is the zero reference).
+                    // Keep the exact turnAngle (no threshold overrides).
                     let turnAngle = currentHeading - targetHeading;
                     if (turnAngle > 180) turnAngle -= 360;
                     if (turnAngle < -180) turnAngle += 360;
-                    if (i === 0) {
-                        turnAngle = 0;
-                        currentHeading = targetHeading;
-                    }
 
                     // Calculate IMU distance using heading delta (matches UI calculation)
                     const targetHeadingForImu = targetHeading;
@@ -1249,13 +1411,16 @@
                     const isReversed = target.reverse || false;
                     
                     // Only turn if angle is significant and NOT reversed
-                    // When reversed, robot stays facing same direction
-                    if (!isReversed && Math.abs(turnAngle) > 2) {
-                        // Flip sign so right turns are positive (matches UI display) when sending to turnWithPID
+                    // When not reversed, emit a turn command using the exact computed
+                    // turnAngle. Do not apply any thresholds here — caller requested
+                    // precise angles. Small turns will be output with one decimal.
+                    if (!isReversed) {
                         let commandedTurn = -turnAngle;
                         if (commandedTurn > 180) commandedTurn -= 360;
                         if (commandedTurn < -180) commandedTurn += 360;
-                        pathCode += `turnWithPID(${commandedTurn.toFixed(1)});\n`;
+                        let cmdTurnNum = Number(commandedTurn.toFixed(1));
+                        if (Object.is(cmdTurnNum, -0)) cmdTurnNum = 0;
+                        pathCode += `turnWithPID(${cmdTurnNum.toFixed(1)});\n`;
                         currentHeading = targetHeading;
                     }
                     
@@ -1575,11 +1740,11 @@
         let segmentEnd = null;
         let progress = 0; // 0..1 along segment
         let speedPxPerS = 100; // default: 2 ft/s -> 100 px/s
-            // Physics-based velocity calculation
         let delayEndTime = null; // for waypoint delays
         let waypointReachedTime = null; // track when waypoint was reached
         let timerStartTime = null; // for match/skills timer
         let timerMaxSeconds = 60; // default to skills (60 seconds)
+        let runPrevHeading = null; // heading (degrees) tracked during run playback (normalized)
 
         function updateTimerDisplay() {
             const timerDisplay = document.getElementById('timer-display');
@@ -1612,16 +1777,8 @@
 
         function startRun() {
             if (pathPoints.length === 0) return;
-            // Calculate real-life max velocity based on drivetrain RPM and wheel size
-            const rpm = parseFloat(document.getElementById('rpm-input').value) || 200;
-            const weight = parseFloat(document.getElementById('weight-input').value) || 18;
-            // Assume 4" wheels (VEX standard), 1 rev = 4 * pi inches
-            const wheelDiameterIn = 4;
-            const wheelCircumferenceIn = wheelDiameterIn * Math.PI;
-            const maxInchesPerSec = (rpm * wheelCircumferenceIn) / 60;
-            // Simulate effect of weight: heavier robots accelerate slower (simple model)
-            // For now, just use max velocity, but could add acceleration curve
-            speedPxPerS = maxInchesPerSec * PX_PER_IN;
+            const speedIn = parseFloat(document.getElementById('speed-input-ft').value) || 24;
+            speedPxPerS = speedIn * PX_PER_IN;
             isRunning = true;
             currentSegment = 0;
             // Start from current robot position (from input values)
@@ -1640,6 +1797,8 @@
             timerDisplay.style.background = 'var(--card)';
             timerDisplay.style.borderColor = 'var(--border)';
             
+            // Initialize previous-heading tracking for run playback comparisons
+            runPrevHeading = normalizeHeading(parseFloat(document.getElementById('heading-input').value) || 0);
             runStep(performance.now());
         }
 
@@ -1666,16 +1825,20 @@
         function runStep(prevTs) {
             runRAF = requestAnimationFrame((ts) => {
                 if (!isRunning) return;
+                
                 // Handle waypoint delay
                 if (waypointReachedTime !== null) {
                     const elapsedDelay = ts - waypointReachedTime;
                     const waypoint = pathPoints[currentSegment];
                     const delay = waypoint.delay || 0;
+                    
                     if (elapsedDelay < delay) {
-                        updateTimerDisplay();
+                        // Still waiting at waypoint
+                        updateTimerDisplay(); // Keep timer running during delay
                         runStep(prevTs);
                         return;
                     } else {
+                        // Delay finished, move to next segment
                         waypointReachedTime = null;
                         currentSegment += 1;
                         if (currentSegment >= pathPoints.length) {
@@ -1685,103 +1848,85 @@
                         segmentStart = pathPoints[currentSegment - 1];
                         segmentEnd = { x: pathPoints[currentSegment].x, y: pathPoints[currentSegment].y };
                         progress = 0;
-                        prevTs = ts;
+                        prevTs = ts; // Update timestamp to prevent jump
                     }
                 }
-                const dt = (ts - prevTs) / 1000;
+                
+                const dt = (ts - prevTs) / 1000; // seconds
                 prevTs = ts;
                 const dx = segmentEnd.x - segmentStart.x;
                 const dy = segmentEnd.y - segmentStart.y;
                 const segLen = Math.hypot(dx, dy);
-                // --- PID Simulation ---
-                // Get PID values
-                const drive_kP = parseFloat(document.getElementById('drive-kp-input').value) || 0.8;
-                const drive_kI = parseFloat(document.getElementById('drive-ki-input').value) || 0.0;
-                const drive_kD = parseFloat(document.getElementById('drive-kd-input').value) || 0.1;
-                const turn_kP = parseFloat(document.getElementById('turn-kp-input').value) || 0.7;
-                const turn_kI = parseFloat(document.getElementById('turn-ki-input').value) || 0.0;
-                const turn_kD = parseFloat(document.getElementById('turn-kd-input').value) || 0.12;
+                
+                // Use waypoint-specific speed if available, otherwise use default
+                const waypoint = pathPoints[currentSegment];
+                const waypointSpeed = waypoint && waypoint.speed ? waypoint.speed : 24; // default 24 in/s
+                const segmentSpeedPxPerS = waypointSpeed * PX_PER_IN;
+                const isReversed = waypoint && waypoint.reverse;
+                
+                const advance = (segmentSpeedPxPerS * dt) / segLen;
+                progress = Math.min(1, progress + advance);
+                const cx = segmentStart.x + dx * progress;
+                const cy = segmentStart.y + dy * progress;
+                // Compute the segment's heading and convert it to the same
+                // normalized representation we use elsewhere ([-180,180]).
+                let rawAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+                rawAngle = (rawAngle + 360) % 360;
+                const displayAngle = ((rawAngle - 180 + 360) % 360);
+                const normalizedAngle = displayAngle > 180 ? displayAngle - 360 : displayAngle;
+                // Align with robot heading convention (+90 shift) and wrap to [-180,180]
+                const wrapAngle = (a) => ((a + 540) % 360) - 180;
+                const headingAdjusted = wrapAngle(normalizedAngle + 90);
 
-                // State for PID (static across calls)
-                if (!runStep.drivePID) runStep.drivePID = { integral: 0, prevError: 0 };
-                if (!runStep.turnPID) runStep.turnPID = { integral: 0, prevError: 0 };
+                // Determine if the heading is effectively unchanged from the previous
+                // segment AND if it equals the robot's input heading. If so, treat
+                // the displayed/run angle as 0 (no turn) to avoid confusing repeated values.
+                // Use the exact segment heading for playback (no thresholds).
+                const robotHeadingNormalized = normalizeHeading(parseFloat(document.getElementById('heading-input').value) || 0);
+                let headingForRun = headingAdjusted;
 
-                // Current robot position and heading
-                let cx = segmentStart.x + (dx * progress);
-                let cy = segmentStart.y + (dy * progress);
-                let currentHeading = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--robot-heading')) || 0;
-                // Target position and heading
-                const tx = segmentEnd.x;
-                const ty = segmentEnd.y;
-                const targetAngle = ((Math.atan2(ty - cy, tx - cx) * 180) / Math.PI + 360) % 360;
-                // Distance error
-                const distError = Math.hypot(tx - cx, ty - cy);
-                // Heading error (shortest path)
-                let headingError = targetAngle - currentHeading;
-                while (headingError > 180) headingError -= 360;
-                while (headingError < -180) headingError += 360;
+                // Convert headingForRun back to the CSS rotation space using the same
+                // HEADING_ZERO_OFFSET used by `updateRobot()` (visual rotation offset).
+                // Map the run-playback heading into CSS rotation space.
+                const cssHeading = (headingForRun + HEADING_ZERO_OFFSET) % 360;
 
-                // --- Drive PID ---
-                runStep.drivePID.integral += distError * dt;
-                const driveDerivative = (distError - runStep.drivePID.prevError) / dt;
-                const driveOutput = drive_kP * distError + drive_kI * runStep.drivePID.integral + drive_kD * driveDerivative;
-                runStep.drivePID.prevError = distError;
-
-                // --- Turn PID ---
-                runStep.turnPID.integral += headingError * dt;
-                const turnDerivative = (headingError - runStep.turnPID.prevError) / dt;
-                const turnOutput = turn_kP * headingError + turn_kI * runStep.turnPID.integral + turn_kD * turnDerivative;
-                runStep.turnPID.prevError = headingError;
-
-                // Clamp outputs (simulate max power)
-                const maxDrive = speedPxPerS * dt;
-                const maxTurn = 10 * dt; // max 10 deg per frame (tunable)
-                const driveStep = Math.max(-maxDrive, Math.min(maxDrive, driveOutput));
-                const turnStep = Math.max(-maxTurn, Math.min(maxTurn, turnOutput));
-
-                // Move robot
-                if (Math.abs(headingError) > 2) {
-                    // Prioritize turning if heading error is large
-                    currentHeading += turnStep;
-                } else {
-                    // Drive forward with heading correction
-                    const moveAngle = (currentHeading - 90) * Math.PI / 180;
-                    cx += driveStep * Math.cos(moveAngle);
-                    cy += driveStep * Math.sin(moveAngle);
-                    currentHeading += turnStep;
-                }
-
-                // Update progress based on distance to target
-                const newDist = Math.hypot(tx - cx, ty - cy);
-                progress = 1 - (newDist / segLen);
-                progress = Math.max(0, Math.min(1, progress));
-
-                // Update robot CSS
                 document.documentElement.style.setProperty('--robot-x', cx + 'px');
                 document.documentElement.style.setProperty('--robot-y', cy + 'px');
-                document.documentElement.style.setProperty('--robot-heading', ((currentHeading + 360) % 360) + 'deg');
+                document.documentElement.style.setProperty('--robot-heading', cssHeading + 'deg');
+                // Update debug overlay while running
+                const dbg = document.getElementById('debug-overlay');
+                if (dbg) dbg.textContent = `run frame:\nheadingAdjusted: ${headingAdjusted.toFixed(2)}\nheadingForRun: ${headingForRun.toFixed(2)}\nrunPrevHeading: ${runPrevHeading?.toFixed(2)}\ncssHeading: ${cssHeading.toFixed(2)}`;
+
+                // Track the previous heading for the next frame's comparisons
+                runPrevHeading = headingAdjusted;
+                
+                // Update timer display
                 updateTimerDisplay();
-                const waypoint = pathPoints[currentSegment];
-                const isReversed = waypoint && waypoint.reverse;
+                
+                // Flip arrow for reversed waypoints
                 const arrow = document.getElementById('front-arrow');
                 if (isReversed) {
                     arrow.classList.add('reversed');
                 } else {
                     arrow.classList.remove('reversed');
                 }
+
                 if (progress >= 1) {
+                    // Reached waypoint, check for delay
                     const waypoint = pathPoints[currentSegment];
                     const delay = waypoint.delay || 0;
-                    // Reset PID for next segment
-                    runStep.drivePID = { integral: 0, prevError: 0 };
-                    runStep.turnPID = { integral: 0, prevError: 0 };
+                    
                     if (delay > 0) {
+                        // Start delay at this waypoint
                         waypointReachedTime = ts;
                         runStep(prevTs);
                         return;
                     }
+                    
+                    // Move to next segment
                     currentSegment += 1;
                     if (currentSegment >= pathPoints.length) {
+                        // Finished
                         isRunning = false;
                         return;
                     } else {
@@ -1790,6 +1935,7 @@
                         progress = 0;
                     }
                 }
+
                 runStep(prevTs);
             });
         }
