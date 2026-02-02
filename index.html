@@ -312,7 +312,8 @@
             background: var(--panel);
             border: 1px solid var(--border);
             border-radius: 12px;
-            overflow: hidden;
+            overflow: auto; /* allow scrolling when many waypoints exist */
+            max-height: calc(100vh - 160px);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
         }
         .waypoints-panel h3 {
@@ -356,7 +357,7 @@
         .path-toggle { color: var(--muted); transition: transform 0.2s ease; }
         .path-toggle.expanded { transform: rotate(90deg); }
         .path-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
-        .path-content.expanded { max-height: 2000px; }
+        .path-content.expanded { max-height: calc(100vh - 220px); overflow-y: auto; }
         .waypoint-item {
             background: var(--card);
             padding: 10px;
@@ -1577,6 +1578,25 @@
             a.download = 'waypoint-distances.txt';
             a.click();
             URL.revokeObjectURL(url);
+        }
+
+        // Debug/test helper: populate the current path with N evenly spaced test waypoints
+        // Use from the browser console: addTestWaypoints(20)
+        function addTestWaypoints(n) {
+            pathPoints = [];
+            const rect = field.getBoundingClientRect();
+            const margin = 40;
+            const startX = margin;
+            const startY = rect.height / 2;
+            const step = (rect.width - margin * 2) / Math.max(1, n - 1);
+            for (let i = 0; i < n; i++) {
+                const x = startX + step * i;
+                const y = startY + Math.sin(i / 3) * 40;
+                pathPoints.push({ x, y });
+            }
+            redrawPath();
+            renderWaypoints();
+            updateDataDisplay();
         }
 
         function applyDataObject(data, { showAlert = true } = {}) {
