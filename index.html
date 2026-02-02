@@ -727,8 +727,12 @@
         }
         document.getElementById('mode-match').addEventListener('click', () => setFieldMode('match'));
         document.getElementById('mode-skills').addEventListener('click', () => setFieldMode('skills'));
-        const PX_PER_FT = 50;
-        const PX_PER_IN = PX_PER_FT / 12;
+        // Compute pixels-per-inch from the canvas width and the measured field inches.
+        // Measured field width (accounting for image perspective): 133 inches.
+        const FIELD_INCHES = 133;
+        const FIELD_PX = (canvas && canvas.width) ? canvas.width : 600;
+        const PX_PER_IN = FIELD_PX / FIELD_INCHES; // px per inch based on measured image
+        const PX_PER_FT = PX_PER_IN * 12;
         const HEADING_ZERO_OFFSET = 180; // input 0° = visual left (standard 180°)
         // Calibrated offsets (auto-applied; no user input)
         let xOffsetCal = 4;
@@ -746,8 +750,13 @@
         let highlightedPath = null;
         let lastRobotPos = { x: 300, y: 300, heading: 0 };
 
-        function pxToIn(px) { return (px / PX_PER_IN).toFixed(2); }
-        function inToPx(inches) { return inches * PX_PER_IN; }
+        // Calibration offset (in inches) to account for measured distance error
+        // Set to +2 to correct a 2" discrepancy observed in real-life testing.
+        // Positive values make displayed distances larger by that many inches.
+        let distanceOffsetIn = 2;
+
+        function pxToIn(px) { return (px / PX_PER_IN + distanceOffsetIn).toFixed(2); }
+        function inToPx(inches) { return (inches - distanceOffsetIn) * PX_PER_IN; }
         function ftToPx(ft) { return ft * PX_PER_FT; } // legacy support
 
         function openCodeModal(code) {
