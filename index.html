@@ -619,6 +619,7 @@
             </div>
             <div class="button-row" style="margin-top: 10px;">
                 <button class="secondary" onclick="exportData()">Export</button>
+                <button class="secondary" onclick="exportDistancesTxt()">Export Distances</button>
                 <label class="file-button secondary" for="file-upload">Import
                     <input type="file" id="file-upload" accept=".json" onchange="importData(event)">
                 </label>
@@ -1526,6 +1527,54 @@
             const a = document.createElement('a');
             a.href = url;
             a.download = 'robot-path.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportDistancesTxt() {
+            const lines = [];
+            const addPath = (points, startPos, name) => {
+                lines.push(name);
+                if (startPos) {
+                    lines.push(`Start: ${pxToIn(startPos.x)}", ${pxToIn(startPos.y)}"`);
+                }
+                if (!points || points.length === 0) {
+                    lines.push('No waypoints');
+                    lines.push('');
+                    return;
+                }
+                points.forEach((p, idx) => {
+                    lines.push(`Waypoint ${idx + 1}: ${pxToIn(p.x)}", ${pxToIn(p.y)}"`);
+                });
+
+                lines.push('Segment distances (inches):');
+                let prev = startPos || null;
+                for (let i = 0; i < points.length; i++) {
+                    const p = points[i];
+                    let dist = 0;
+                    if (prev) {
+                        dist = Math.hypot(p.x - prev.x, p.y - prev.y) / PX_PER_IN;
+                    }
+                    const label = i === 0 ? `Start -> 1` : `${i} -> ${i + 1}`;
+                    lines.push(`  ${label}: ${dist.toFixed(2)} in`);
+                    prev = p;
+                }
+                lines.push('');
+            };
+
+            // Saved paths
+            if (savedPaths && savedPaths.length > 0) {
+                savedPaths.forEach((path, idx) => addPath(path.points, path.start, `Saved Path ${idx + 1}`));
+            }
+
+            // Current path
+            addPath(pathPoints, lastRobotPos, 'Current Path');
+
+            const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'waypoint-distances.txt';
             a.click();
             URL.revokeObjectURL(url);
         }
