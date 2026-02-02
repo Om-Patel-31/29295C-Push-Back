@@ -1433,13 +1433,24 @@
                         currentHeading = targetHeading;
                     }
                     
-                    // Drive to waypoint using IMU-adjusted distance (negative distance for reverse - drives backwards)
+                    // Drive to waypoint using IMU-adjusted distance.
+                    // For reversed drives we negate the full traveled distance (distance + arc)
+                    // so the generated code uses -1*(dist + imu_dist) instead of "-dist + imu_dist".
                     if (distance > 0.5 || arcDistance > 0.5) {
-                        const driveCmd = isReversed ? '-' : '';
                         if (imuOffset !== 0 && arcDistance > 0.01) {
-                            pathCode += `driveWithPID(${driveCmd}${distance.toFixed(2)} + IMU_distance);\n`;
+                            const totalDist = (distance + arcDistance).toFixed(2);
+                            if (isReversed) {
+                                pathCode += `driveWithPID(-1*(${totalDist}));\n`;
+                            } else {
+                                pathCode += `driveWithPID(${totalDist});\n`;
+                            }
                         } else {
-                            pathCode += `driveWithPID(${driveCmd}${distance.toFixed(2)});\n`;
+                            const distStr = distance.toFixed(2);
+                            if (isReversed) {
+                                pathCode += `driveWithPID(-1*(${distStr}));\n`;
+                            } else {
+                                pathCode += `driveWithPID(${distStr});\n`;
+                            }
                         }
                     }
                     
