@@ -1560,6 +1560,29 @@
                     lines.push(`  ${label}: ${dist.toFixed(2)} in`);
                     prev = p;
                 }
+
+                // Angles: compute absolute heading and relative turn for each segment
+                const wrapAngle = (a) => ((a + 540) % 360) - 180;
+                const robotHeading = normalizeHeading(parseFloat(document.getElementById('heading-input').value) || 0);
+                let prevHeading = robotHeading;
+                lines.push('Angles (deg):');
+                for (let i = 0; i < points.length; i++) {
+                    const p = points[i];
+                    const prevP = i === 0 ? (startPos || lastRobotPos) : points[i - 1];
+                    const dx = p.x - prevP.x;
+                    const dy = p.y - prevP.y;
+                    let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                    angle = (angle + 360) % 360;
+                    const displayAngle = ((angle - 180 + 360) % 360);
+                    const normalizedAngle = displayAngle > 180 ? displayAngle - 360 : displayAngle;
+                    let absoluteHeading = wrapAngle(normalizedAngle + 90);
+                    if (p.angleOverride !== undefined) {
+                        absoluteHeading = wrapAngle(prevHeading + Number(p.angleOverride));
+                    }
+                    const relativeTurn = wrapAngle(absoluteHeading - prevHeading);
+                    lines.push(`  Waypoint ${i + 1}: abs=${absoluteHeading.toFixed(1)}°, rel=${relativeTurn.toFixed(1)}°${p.angleOverride !== undefined ? ' (overridden)' : ''}${p.reverse ? ' (reversed)' : ''}`);
+                    prevHeading = absoluteHeading;
+                }
                 lines.push('');
             };
 
