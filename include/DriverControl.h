@@ -4,6 +4,12 @@
 #include "vex.h"
 #include <cmath>
 
+// Driver input handling and shaping for differential-drive robots.
+//
+// Keep comments short: modes describe how controller axes map to
+// drivetrain commands. Inputs are read in percent (-100..100). Curves
+// and sensitivities let you tune responsiveness without changing motor code.
+
 // Control scheme types
 enum class ControlType {
   ARCADE,           // Left stick Y = drive, Right stick X = turn
@@ -32,6 +38,9 @@ private:
   }
   
   // Apply exponential curve to input
+  // Applies an exponential shaping curve to joystick percent input.
+  // - `inputPercent` expected in [-100,100].
+  // - `expo` >1 makes low inputs finer and high inputs stronger.
   double applyCurve(double inputPercent, double expo) {
     double v = std::fmin(std::fmax(inputPercent, -100.0), 100.0);
     double sign = (v >= 0.0) ? 1.0 : -1.0;
@@ -89,6 +98,9 @@ public:
   }
   
   // Calculate motor outputs based on controller input
+  // `calculate` reads the selected axes, applies deadzone and shaping,
+  // scales turning by sensitivity, and writes final left/right outputs
+  // in percent (-100..100). For TANK mode it returns direct sides.
   void calculate(vex::controller& controller, double& leftOutput, double& rightOutput, bool slowTurn = false) {
     int drivePower = 0;
     int turnPower = 0;
@@ -124,6 +136,7 @@ public:
         turnPower = applyDeadzone(getAxisPosition(controller, turnAxis));
         // Scale turn based on velocity for better control at low speeds
         if (std::abs(drivePower) > 5) {
+          // reduce turn when driving fast: simple linear scale factor
           turnPower = (int)(turnPower * (1.0 - std::abs(drivePower) / 200.0));
         }
         break;
