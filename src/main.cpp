@@ -583,7 +583,7 @@ void autonomous(void)
 	if (skillsMode)
 		skillsAuton();
 	else if (matchAutonSide)
-		matchAutonRight();
+		matchAutonRightAveryVersion();
 	else
 		matchAutonLeft();
 }
