@@ -4,12 +4,12 @@
 #include "vex.h"
 #include <cmath>
 
-using namespace	vex;
+using namespace vex;
 
-competition		Competition;
+competition Competition;
 
 // DRIVER CONTROL CONFIGURATION - Change this to switch control schemes
-DriverControl	driverControl(ControlType::ARCADE, 10, 2.0, 60, 50);
+DriverControl driverControl(ControlType::ARCADE, 10, 2.0, 60, 50);
 
 vex::brain Brain;
 vex::controller Controller1;
@@ -31,60 +31,60 @@ vex::drivetrain Drivetrain(leftSide, rightSide, 259.34, 320, 40, mm, 1);
 vex::motor intakeMotor(vex::PORT1, ratio6_1, true);
 vex::motor outputMotor(vex::PORT6, ratio6_1, false);
 
-digital_out		Blocker(Brain.ThreeWirePort.A);
-digital_out		MatchLoader(Brain.ThreeWirePort.B);
-digital_out		Pistons(Brain.ThreeWirePort.C);
+digital_out Blocker(Brain.ThreeWirePort.A);
+digital_out MatchLoader(Brain.ThreeWirePort.B);
+digital_out Pistons(Brain.ThreeWirePort.C);
 
 vex::inertial inertialSensor = vex::inertial(PORT21);
 
-PIDController	drivePID(5, 0.5, 0.01);
-PIDController	turnPID(0.5, 0.01, 0.05);
-OdometryTracker	odometry;
+PIDController drivePID(5, 0.5, 0.01);
+PIDController turnPID(0.5, 0.01, 0.05);
+OdometryTracker odometry;
 
 // Forward declarations for functions defined later
-void			updateOdometry(void);
-void			calibrateIMU(void);
-extern bool		matchAutonSide;
+void updateOdometry(void);
+void calibrateIMU(void);
+extern bool matchAutonSide;
 
-const int		IMU_distance = 13;
+const int IMU_distance = 13;
 
-void	intakeForwardPressed(void)
+void intakeForwardPressed(void)
 {
 	intakeMotor.spin(reverse);
 }
-void	intakeForwardReleased(void)
+void intakeForwardReleased(void)
 {
 	if (!Controller1.ButtonR2.pressing())
 	{
 		intakeMotor.stop();
 	}
 }
-void	intakeReversePressed(void)
+void intakeReversePressed(void)
 {
 	intakeMotor.spin(forward);
 }
-void	intakeReverseReleased(void)
+void intakeReverseReleased(void)
 {
 	if (!Controller1.ButtonR1.pressing())
 		intakeMotor.stop();
 }
 
-void	outputForwardPressed(void)
+void outputForwardPressed(void)
 {
 	outputMotor.spin(forward);
 }
-void	outputForwardReleased(void)
+void outputForwardReleased(void)
 {
 	if (!Controller1.ButtonL2.pressing())
 	{
 		outputMotor.stop();
 	}
 }
-void	outputReversePressed(void)
+void outputReversePressed(void)
 {
 	outputMotor.spin(reverse);
 }
-void	outputReverseReleased(void)
+void outputReverseReleased(void)
 {
 	if (!Controller1.ButtonL1.pressing())
 	{
@@ -92,35 +92,35 @@ void	outputReverseReleased(void)
 	}
 }
 
-void	SpinBothForwardPressed(void)
+void SpinBothForwardPressed(void)
 {
 	intakeForwardPressed();
 	outputForwardPressed();
 }
 
-void	SpinBothForwardReleased(void)
+void SpinBothForwardReleased(void)
 {
 	intakeForwardReleased();
 	outputForwardReleased();
 }
 
-void	SpinBothReversePressed(void)
+void SpinBothReversePressed(void)
 {
 	intakeReversePressed();
 	outputReversePressed();
 }
 
-void	SpinBothReverseReleased(void)
+void SpinBothReverseReleased(void)
 {
 	intakeReverseReleased();
 	outputReverseReleased();
 }
 
-bool			blockerExtended = false;
-bool			matchLoaderExtended = false;
-bool			pistonsExtended = false;
+bool blockerExtended = false;
+bool matchLoaderExtended = false;
+bool pistonsExtended = false;
 
-void	blockerToggle(void)
+void blockerToggle(void)
 {
 	blockerExtended = !blockerExtended;
 	Blocker.set(blockerExtended);
@@ -129,7 +129,7 @@ void	blockerToggle(void)
 	Brain.Screen.print("Blocker: %s", blockerExtended ? "EXT" : "CL");
 }
 
-void	matchLoaderToggle(void)
+void matchLoaderToggle(void)
 {
 	matchLoaderExtended = !matchLoaderExtended;
 	MatchLoader.set(matchLoaderExtended);
@@ -138,7 +138,7 @@ void	matchLoaderToggle(void)
 	Brain.Screen.print("MatchLD: %s", matchLoaderExtended ? "EXT" : "CL");
 }
 
-void	pistonsToggle(void)
+void pistonsToggle(void)
 {
 	pistonsExtended = !pistonsExtended;
 	Pistons.set(pistonsExtended);
@@ -148,7 +148,7 @@ void	pistonsToggle(void)
 }
 
 // Auton side selector handlers (Up = RIGHT, Down = LEFT)
-void	selectRightAuton(void)
+void selectRightAuton(void)
 {
 	matchAutonSide = true;
 	Brain.Screen.clearLine(2);
@@ -156,7 +156,7 @@ void	selectRightAuton(void)
 	Brain.Screen.print("Auton: RIGHT");
 }
 
-void	selectLeftAuton(void)
+void selectLeftAuton(void)
 {
 	matchAutonSide = false;
 	Brain.Screen.clearLine(2);
@@ -164,7 +164,8 @@ void	selectLeftAuton(void)
 	Brain.Screen.print("Auton: LEFT");
 }
 
-template <typename T> static T clamp(T value, T minVal, T maxVal)
+template <typename T>
+static T clamp(T value, T minVal, T maxVal)
 {
 	if (value > maxVal)
 		return (maxVal);
@@ -173,39 +174,37 @@ template <typename T> static T clamp(T value, T minVal, T maxVal)
 	return (value);
 }
 
-void	increaseExpo(void)
+void increaseExpo(void)
 {
-	double	currentExpo;
+	double currentExpo;
 
 	currentExpo = driverControl.getExponent();
 	if (currentExpo < 5.0)
 	{
-		driverControl.setExponent(std::round((currentExpo + 0.1) * 100.0)
-			/ 100.0);
+		driverControl.setExponent(std::round((currentExpo + 0.1) * 100.0) / 100.0);
 		Controller1.Screen.clearLine(3);
 		Controller1.Screen.setCursor(3, 1);
 		Controller1.Screen.print("Expo: %.2f", driverControl.getExponent());
 	}
 }
 
-void	decreaseExpo(void)
+void decreaseExpo(void)
 {
-	double	currentExpo;
+	double currentExpo;
 
 	currentExpo = driverControl.getExponent();
 	if (currentExpo > 1.0)
 	{
-		driverControl.setExponent(std::round((currentExpo - 0.1) * 100.0)
-			/ 100.0);
+		driverControl.setExponent(std::round((currentExpo - 0.1) * 100.0) / 100.0);
 		Controller1.Screen.clearLine(3);
 		Controller1.Screen.setCursor(3, 1);
 		Controller1.Screen.print("Expo: %.2f", driverControl.getExponent());
 	}
 }
 
-void	increaseTurnSens(void)
+void increaseTurnSens(void)
 {
-	int	currentSens;
+	int currentSens;
 
 	currentSens = driverControl.getTurnSensitivity();
 	if (currentSens < 100)
@@ -217,9 +216,9 @@ void	increaseTurnSens(void)
 	}
 }
 
-void	decreaseTurnSens(void)
+void decreaseTurnSens(void)
 {
-	int	currentSens;
+	int currentSens;
 
 	currentSens = driverControl.getTurnSensitivity();
 	if (currentSens > 10)
@@ -231,20 +230,20 @@ void	decreaseTurnSens(void)
 	}
 }
 
-void	driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
-		bool useDistanceSensor = false)
+void driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
+				  bool useDistanceSensor = false)
 {
-	double	leftStartPos;
-	double	rightStartPos;
-	double	elapsedTime;
-	double	leftCurr;
-	double	rightCurr;
-	double	leftDist;
-	double	rightDist;
-	double	avgDist;
-	double	error;
-	double	pidOutput;
-	double	driveSpeed;
+	double leftStartPos;
+	double rightStartPos;
+	double elapsedTime;
+	double leftCurr;
+	double rightCurr;
+	double leftDist;
+	double rightDist;
+	double avgDist;
+	double error;
+	double pidOutput;
+	double driveSpeed;
 
 	drivePID.reset();
 	drivePID.tolerance = 0.1;
@@ -263,11 +262,11 @@ void	driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
 		{
 			leftSide.stop(brake);
 			rightSide.stop(brake);
-			break ;
+			break;
 		}
 		pidOutput = drivePID.calculate(error, 0.01);
 		driveSpeed = clamp(pidOutput, -static_cast<double>(velocity),
-				static_cast<double>(velocity));
+						   static_cast<double>(velocity));
 		leftSide.setVelocity(std::abs(driveSpeed), percent);
 		rightSide.setVelocity(std::abs(driveSpeed), percent);
 		if (driveSpeed >= 0)
@@ -289,13 +288,13 @@ void	driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
 	rightSide.stop();
 }
 
-void	turnWithPID(double targetHeading, int timeout = 3000)
+void turnWithPID(double targetHeading, int timeout = 3000)
 {
-	double	elapsedTime;
-	double	currentHeading;
-	double	error;
-	double	pidOutput;
-	double	turnSpeed;
+	double elapsedTime;
+	double currentHeading;
+	double error;
+	double pidOutput;
+	double turnSpeed;
 
 	turnPID.reset();
 	turnPID.tolerance = 1.0;
@@ -312,7 +311,7 @@ void	turnWithPID(double targetHeading, int timeout = 3000)
 		{
 			leftSide.stop();
 			rightSide.stop();
-			break ;
+			break;
 		}
 		pidOutput = turnPID.calculate(error, 0.01);
 		turnSpeed = clamp(pidOutput, -100.0, 100.0);
@@ -337,11 +336,11 @@ void	turnWithPID(double targetHeading, int timeout = 3000)
 	rightSide.stop();
 }
 
-void	updateOdometry(void)
+void updateOdometry(void)
 {
-	double	currentHeading;
-	double	leftDist;
-	double	rightDist;
+	double currentHeading;
+	double leftDist;
+	double rightDist;
 
 	currentHeading = inertialSensor.rotation();
 	leftDist = leftSide.position(vex::rotationUnits::rev) * 10.2;
@@ -349,7 +348,7 @@ void	updateOdometry(void)
 	odometry.update(leftDist, rightDist, currentHeading);
 }
 
-void	resetEncoders(void)
+void resetEncoders(void)
 {
 	leftSide.resetPosition();
 	rightSide.resetPosition();
@@ -357,17 +356,17 @@ void	resetEncoders(void)
 	outputMotor.resetPosition();
 }
 
-bool			skillsMode = true;
-bool			matchAutonSide = false;
-bool			autonTestActive = false;
+bool skillsMode = false;
+bool matchAutonSide = true;
+bool autonTestActive = false;
 
 // --------------------
 // AUTON FUNCTIONS
 // --------------------
 // Forward declaration for skills autonomous
-void			skillsAuton(void);
+void skillsAuton(void);
 
-void	matchAutonRight(void)
+void matchAutonRight(void)
 {
 	calibrateIMU();
 	Brain.Screen.clearLine(3);
@@ -398,7 +397,62 @@ void	matchAutonRight(void)
 	Controller1.rumble(".-");
 }
 
-void	matchAutonLeft(void)
+void matchAutonRightAveryVersion(void)
+{
+	// Generated VEX C++ code for skillsAuton()
+	// Copy and paste this into your skillsAuton() function
+
+	// Starting position: (14.50", 84.50") @ 270°
+	// IMU offset from center: 0.00" (centered)
+	// Calibration offsets: X=4.00", Y=0.50"
+	calibrateIMU();
+	resetEncoders();
+	Brain.Screen.clearLine(3);
+	Brain.Screen.setCursor(3, 1);
+	Brain.Screen.print("Avery Match Auton: RIGHT");
+	odometry.reset();
+	drivePID.reset();
+	turnPID.reset();
+
+	// Path 1
+	// Waypoint 1: (28.939999999999998", 84.27") - Distance: 18.44"
+	turnWithPID(-179.2);
+	driveWithPID(18.44);
+	updateOdometry();
+
+	// Waypoint 2: (44.46", 87.37") - Distance: 15.83"
+	turnWithPID(10.5);
+	driveWithPID(15.83);
+	updateOdometry();
+
+	// Waypoint 3: (52", 80.28") - Distance: 10.35"
+	turnWithPID(-54.5);
+	driveWithPID(10.35);
+	updateOdometry();
+
+	// Waypoint 4: (20.96", 111.31") - Distance: 43.89"
+	turnWithPID(178.2);
+	driveWithPID(43.89);
+	updateOdometry();
+
+	// Waypoint 5: (12.54", 111.31") - Distance: 8.42"
+	turnWithPID(45.0);
+	driveWithPID(8.42);
+	updateOdometry();
+
+	// Waypoint 6: (37.15", 110.87") - Distance: 24.61"
+	turnWithPID(179.0);
+	driveWithPID(24.61);
+	updateOdometry();
+
+	Controller1.rumble(".");
+	// End of generated code
+
+	//path only, untested. 
+	//need to add intake/match loader control.
+}
+
+void matchAutonLeft(void)
 {
 	Brain.Screen.clearLine(3);
 	Brain.Screen.setCursor(3, 1);
@@ -428,7 +482,7 @@ void	matchAutonLeft(void)
 	wait(5000, msec);
 }
 
-void	skillsAuton(void)
+void skillsAuton(void)
 {
 	// Generated VEX C++ code for skillsAuton()
 	// Copy and paste this into your skillsAuton() function
@@ -450,23 +504,23 @@ void	skillsAuton(void)
 	driveWithPID(9.8 + IMU_distance);
 	updateOdometry();
 	// Waypoint 3: (25.62", 116.14") - Distance: 12.48" (IMU: 49.91")
-	driveWithPID(-1*(12.48 + IMU_distance));
+	driveWithPID(-1 * (12.48 + IMU_distance));
 	updateOdometry();
 	// Waypoint 4: (29.46", 129.82") - Distance: 14.21" (IMU: 30.05")
-	driveWithPID(-1*(14.21 + IMU_distance));
+	driveWithPID(-1 * (14.21 + IMU_distance));
 	updateOdometry();
 	// Waypoint 5: (101.7", 130.01") - Distance: 72.24" (IMU: 87.77")
-	driveWithPID(-1*(72.24 + IMU_distance));
+	driveWithPID(-1 * (72.24 + IMU_distance));
 	updateOdometry();
 	// Waypoint 6: (101.46", 117.53") - Distance: 12.48" (IMU: 31.59")
-	driveWithPID(-1*(12.48 + IMU_distance));
+	driveWithPID(-1 * (12.48 + IMU_distance));
 	updateOdometry();
 	// Waypoint 7: (104.82", 117.53") - Distance: 3.36" (IMU: 22.44")
 	turnWithPID(180.0);
 	driveWithPID(3.36 + IMU_distance);
 	updateOdometry();
 	// Waypoint 8: (98.58", 117.68") - Distance: 6.24" (IMU: 43.66")
-	driveWithPID(-1*(6.24 + IMU_distance));
+	driveWithPID(-1 * (6.24 + IMU_distance));
 	updateOdometry();
 	Controller1.rumble(".−");
 	// End of generated code
@@ -475,7 +529,7 @@ void	skillsAuton(void)
 // --------------------
 // PRE-AUTON
 // --------------------
-void	calibrateIMU(void)
+void calibrateIMU(void)
 {
 	Brain.Screen.clearScreen();
 	Brain.Screen.setCursor(1, 1);
@@ -492,10 +546,10 @@ void	calibrateIMU(void)
 	wait(20, msec);
 }
 
-void	pre_auton(void)
+void pre_auton(void)
 {
 	// Force default to LEFT auton at startup
-	matchAutonSide = false;
+	matchAutonSide = true;
 	Brain.Screen.clearScreen();
 	Brain.Screen.setCursor(1, 1);
 	Brain.Screen.print("Mode: %s", skillsMode ? "SKILLS" : "MATCH");
@@ -523,7 +577,7 @@ void	pre_auton(void)
 	Controller1.ButtonDown.pressed(selectLeftAuton);
 }
 
-void	autonomous(void)
+void autonomous(void)
 {
 	calibrateIMU();
 	if (skillsMode)
@@ -534,13 +588,13 @@ void	autonomous(void)
 		matchAutonLeft();
 }
 
-void	usercontrol(void)
+void usercontrol(void)
 {
-	double	leftOutput;
-	double	rightOutput;
-	int		lastTelemetryMs;
-	bool	slowTurn;
-	int		currentMs;
+	double leftOutput;
+	double rightOutput;
+	int lastTelemetryMs;
+	bool slowTurn;
+	int currentMs;
 
 	// IMU already calibrated in pre_auton, no need to recalibrate
 	odometry.reset();
@@ -585,7 +639,7 @@ void	usercontrol(void)
 	}
 }
 
-int	main(void)
+int main(void)
 {
 	pre_auton();
 	Competition.autonomous(autonomous);
