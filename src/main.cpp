@@ -408,44 +408,26 @@ odometry.reset();
 drivePID.reset();
 turnPID.reset();
 
-driveWithPID(10);
-turnWithPID(90);
+//driveWithPID(10); drives forward
+//turnWithPID(90); turns right
 
-/*
-// Path 1
-// Waypoint 1: (28.939999999999998", 84.27") - Distance: 18.44"
-turnWithPID(90.8);
-driveWithPID(18.44);
-updateOdometry();
-
-// Waypoint 2: (44.46", 87.37") - Distance: 15.83"
-turnWithPID(10.5);
-driveWithPID(15.83);
-updateOdometry();
-
-// Waypoint 3: (52", 80.28") - Distance: 10.35"
-turnWithPID(-54.5);
-driveWithPID(10.35);
-updateOdometry();
-
-// Waypoint 4: (20.96", 111.31") - Distance: 43.89"
-turnWithPID(178.2);
-driveWithPID(43.89);
-updateOdometry();
-
-// Waypoint 5: (12.54", 111.31") - Distance: 8.42"
-turnWithPID(45.0);
-driveWithPID(8.42);
-updateOdometry();
-
-// Waypoint 6: (37.15", 110.87") - Distance: 24.61"
-turnWithPID(179.0);
-driveWithPID(24.61);
-updateOdometry();
-
-Controller1.rumble(".−");
-// End of generated code
-*/
+//drive forward
+//turn right slightly
+//drive forward
+//intake
+//turn left to face centre goal
+//drive forward
+//score in centre goal by reverse intaking
+//drive backward
+//spin 180deg
+//drive forward
+//turn right slightly
+//drive forward
+//intake from match loader
+//drive backward
+//spin 180
+//drive forward
+//intake to put balls in long goal
 }
 
 void matchAutonLeft(void)
