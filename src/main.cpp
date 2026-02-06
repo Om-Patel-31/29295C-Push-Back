@@ -399,57 +399,53 @@ void matchAutonRight(void)
 
 void matchAutonRightAveryVersion(void)
 {
-	// Generated VEX C++ code for skillsAuton()
-	// Copy and paste this into your skillsAuton() function
+calibrateIMU();
+resetEncoders();
 
-	// Starting position: (14.50", 84.50") @ 270°
-	// IMU offset from center: 0.00" (centered)
-	// Calibration offsets: X=4.00", Y=0.50"
-	calibrateIMU();
-	resetEncoders();
-	Brain.Screen.clearLine(3);
-	Brain.Screen.setCursor(3, 1);
-	Brain.Screen.print("Avery Match Auton: RIGHT");
-	odometry.reset();
-	drivePID.reset();
-	turnPID.reset();
+Brain.Screen.print("Avery Match Auton: RIGHT");
 
-	// Path 1
-	// Waypoint 1: (28.939999999999998", 84.27") - Distance: 18.44"
-	turnWithPID(-179.2);
-	driveWithPID(18.44);
-	updateOdometry();
+odometry.reset();
+drivePID.reset();
+turnPID.reset();
 
-	// Waypoint 2: (44.46", 87.37") - Distance: 15.83"
-	turnWithPID(10.5);
-	driveWithPID(15.83);
-	updateOdometry();
+driveWithPID(10);
+turnWithPID(90);
 
-	// Waypoint 3: (52", 80.28") - Distance: 10.35"
-	turnWithPID(-54.5);
-	driveWithPID(10.35);
-	updateOdometry();
+/*
+// Path 1
+// Waypoint 1: (28.939999999999998", 84.27") - Distance: 18.44"
+turnWithPID(90.8);
+driveWithPID(18.44);
+updateOdometry();
 
-	// Waypoint 4: (20.96", 111.31") - Distance: 43.89"
-	turnWithPID(178.2);
-	driveWithPID(43.89);
-	updateOdometry();
+// Waypoint 2: (44.46", 87.37") - Distance: 15.83"
+turnWithPID(10.5);
+driveWithPID(15.83);
+updateOdometry();
 
-	// Waypoint 5: (12.54", 111.31") - Distance: 8.42"
-	turnWithPID(45.0);
-	driveWithPID(8.42);
-	updateOdometry();
+// Waypoint 3: (52", 80.28") - Distance: 10.35"
+turnWithPID(-54.5);
+driveWithPID(10.35);
+updateOdometry();
 
-	// Waypoint 6: (37.15", 110.87") - Distance: 24.61"
-	turnWithPID(179.0);
-	driveWithPID(24.61);
-	updateOdometry();
+// Waypoint 4: (20.96", 111.31") - Distance: 43.89"
+turnWithPID(178.2);
+driveWithPID(43.89);
+updateOdometry();
 
-	Controller1.rumble(".");
-	// End of generated code
+// Waypoint 5: (12.54", 111.31") - Distance: 8.42"
+turnWithPID(45.0);
+driveWithPID(8.42);
+updateOdometry();
 
-	//path only, untested. 
-	//need to add intake/match loader control.
+// Waypoint 6: (37.15", 110.87") - Distance: 24.61"
+turnWithPID(179.0);
+driveWithPID(24.61);
+updateOdometry();
+
+Controller1.rumble(".−");
+// End of generated code
+*/
 }
 
 void matchAutonLeft(void)
