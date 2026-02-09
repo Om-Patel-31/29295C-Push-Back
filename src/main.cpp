@@ -37,7 +37,7 @@ digital_out Pistons(Brain.ThreeWirePort.C);
 
 vex::inertial inertialSensor = vex::inertial(PORT21);
 
-PIDController drivePID(5, 0.5, 0.01);
+PIDController drivePID(2, 0.1, 0.01);
 PIDController turnPID(0.5, 0.01, 0.05);
 OdometryTracker odometry;
 
@@ -411,6 +411,41 @@ turnPID.reset();
 //driveWithPID(10); drives forward
 //turnWithPID(90); turns right
 
+
+//MATCH LOADER + LONG GOAL SCORING PSEUDOCODE
+//drive forward
+//right 90 deg
+//drive forward
+//right 90 deg
+//drive forward + match load + intake run
+//reverse + line up with long goal
+//release balls into long goal
+
+driveWithPID(18.5);
+turnWithPID(90);
+updateOdometry();
+
+driveWithPID(39);
+turnWithPID(180);
+updateOdometry();
+
+driveWithPID(11);
+intakeMotor.spin(forward);
+wait(3000, msec);
+intakeMotor.stop();
+turnWithPID(180);
+driveWithPID(-38);
+updateOdometry();
+
+intakeMotor.spin(reverse);
+outputMotor.spin(reverse);
+wait(4000, msec);
+intakeMotor.stop();
+outputMotor.stop();
+updateOdometry();
+
+
+//CENTRE SCORING AND MATCH LOADER + LONG GOAL SCORING PSEUDOCODE
 //drive forward
 //turn right slightly
 //drive forward
