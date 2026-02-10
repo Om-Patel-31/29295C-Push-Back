@@ -421,20 +421,20 @@ turnPID.reset();
 //reverse + line up with long goal
 //release balls into long goal
 
-driveWithPID(18.5);
+driveWithPID(22);
 turnWithPID(90);
 updateOdometry();
 
-driveWithPID(39);
+driveWithPID(42);
 turnWithPID(180);
 updateOdometry();
 
-driveWithPID(11);
+driveWithPID(14);
 intakeMotor.spin(forward);
 wait(3000, msec);
 intakeMotor.stop();
 turnWithPID(180);
-driveWithPID(-38);
+driveWithPID(-40);
 updateOdometry();
 
 intakeMotor.spin(reverse);
