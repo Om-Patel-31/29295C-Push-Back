@@ -430,15 +430,15 @@ turnWithPID(180);
 updateOdometry();
 
 driveWithPID(14);
-intakeMotor.spin(forward);
+intakeMotor.spin(reverse);
 wait(3000, msec);
 intakeMotor.stop();
 turnWithPID(180);
 driveWithPID(-40);
 updateOdometry();
 
-intakeMotor.spin(reverse);
-outputMotor.spin(reverse);
+intakeMotor.spin(forward);
+outputMotor.spin(forward);
 wait(4000, msec);
 intakeMotor.stop();
 outputMotor.stop();
