@@ -26,7 +26,7 @@ public:
   // - wheelBase: distance between left and right drive wheels (used if
   //   you later compute rotation from differential travel).
   // - trackingWheelRadius: encoder/tracking wheel radius (for conversions).
-  double wheelBase = 10;
+  double wheelBase = 12;
   double trackingWheelRadius = 3.25;
 
   // Advance pose by average wheel travel along IMU heading.
