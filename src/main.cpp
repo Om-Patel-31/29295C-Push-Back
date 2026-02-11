@@ -50,6 +50,8 @@ extern bool		matchAutonSide;
 const int		IMU_distance = 13;
 const double  kLoopMs = 10.0;
 const double  kLoopDt = 0.010;
+const double  kLoopMs = 10.0;
+const double  kLoopDt = 0.010;
 
 void	intakeForwardPressed(void)
 {
@@ -248,6 +250,14 @@ void	driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
 	double error;
 	double pidOutput;
 	double driveSpeed;
+	double startX, startY, startHeading;
+	double headingPrevError, headingKp, headingKd, headingKi;
+	double headingIntegral, headingIntegralLimit;
+	double currentDriveSpeed, maxDeltaPerSec, slowZone;
+	double decelK, minDecelScale, minApproachSpeed;
+	double headingErrorFiltered, headingDeadband, headingFilterAlpha;
+	int elapsedTimeMs;
+	double dx, dy, headingRad, currentDist;
 
 	drivePID.reset();
 	drivePID.tolerance = 2.0;
@@ -296,13 +306,20 @@ void	driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
 		if (driveSpeed >= 0)
 		{
 			leftSide.spin(forward);
+		}
 		else
+		{
 			leftSide.spin(reverse);
-			
-		if (rightSpeed >= 0)
+		}
+		
+		if (driveSpeed >= 0)
+		{
 			rightSide.spin(forward);
+		}
 		else
+		{
 			rightSide.spin(reverse);
+		}
 		
 		wait(kLoopMs, msec);
 		elapsedTimeMs += kLoopMs;
@@ -318,6 +335,9 @@ void turnWithPID(double targetHeading, int timeout = 3000)
 	double	error;
 	double	pidOutput;
 	double	turnSpeed;
+	double	currentTurnSpeed, maxTurnDeltaPerSec, turnSlowZone;
+	double	turnDecelK, minTurnSpeed;
+	double	requestingTurnSpeed;
 
 	turnPID.reset();
 	turnPID.tolerance = 1.0;
@@ -342,7 +362,7 @@ void turnWithPID(double targetHeading, int timeout = 3000)
 			break ;
 		}
 		pidOutput = turnPID.calculate(error, kLoopDt);
-		requestedTurnSpeed = clamp(pidOutput, -100.0, 100.0);
+		double requestedTurnSpeed = clamp(pidOutput, -100.0, 100.0);
 		// Smooth decel near target for gentle turn exit
 		if (std::abs(error) < turnSlowZone)
 		{
@@ -356,7 +376,7 @@ void turnWithPID(double targetHeading, int timeout = 3000)
 			{
 				double maxDelta;
 
-			maxDelta = maxTurnDeltaPerSec * kLoopDt;
+			double maxDelta = maxTurnDeltaPerSec * kLoopDt;
 			if (requestedTurnSpeed - currentTurnSpeed > maxDelta)
 				currentTurnSpeed += maxDelta;
 			else if (currentTurnSpeed - requestedTurnSpeed > maxDelta)
@@ -379,7 +399,7 @@ void turnWithPID(double targetHeading, int timeout = 3000)
 		}
 		// Update odometry at 1 ms intervals during auton turns
 		updateOdometry();
-		wait(kLoopMs, msec);
+		wait((int)kLoopMs, msec);
 		elapsedTime += kLoopMs;
 	}
 	leftSide.stop();
@@ -391,26 +411,34 @@ void updateOdometry(void)
 	double	currentHeading;
 	double	leftDist;
 	double	rightDist;
+	static double currentLeftPos = 0.0;
+	static double currentRightPos = 0.0;
+	static double leftDelta = 0.0;
+	static double rightDelta = 0.0;
+	static double prevLeftPos = 0.0;
+	static double prevRightPos = 0.0;
 
-		currentHeading = inertialSensor.rotation();
-		currentLeftPos = leftSide.position(vex::rotationUnits::rev) * 10.2;
-		currentRightPos = rightSide.position(vex::rotationUnits::rev) * 10.2;
-		leftDelta = currentLeftPos - prevLeftPos;
-		rightDelta = currentRightPos - prevRightPos;
+	currentHeading = inertialSensor.rotation();
+	currentLeftPos = leftSide.position(vex::rotationUnits::rev) * 10.2;
+	currentRightPos = rightSide.position(vex::rotationUnits::rev) * 10.2;
+	leftDelta = currentLeftPos - prevLeftPos;
+	rightDelta = currentRightPos - prevRightPos;
 
-		// Only suppress distance if wheels are moving in opposite directions (pure rotation)
-		// If motors move in the same direction,
-			report the distance (even if curved)
-		if (leftDelta * rightDelta < 0) // Opposite signs = opposite directions
-		{
-			// Pure rotation: suppress distance update
-			odometry.update(0.0, 0.0, currentHeading);
-		}
-		else
-		{
-			// Same direction or one wheel stopped: report the movement
-			odometry.update(leftDelta, rightDelta, currentHeading);
-		}
+	// Only suppress distance if wheels are moving in opposite directions (pure rotation)
+	// If motors move in the same direction, report the distance (even if curved)
+	if (leftDelta * rightDelta < 0)  // Opposite signs = opposite directions
+	{
+		// Pure rotation: suppress distance update
+		odometry.update(0.0, 0.0, currentHeading);
+	}
+	else
+	{
+		// Same direction or one wheel stopped: report the movement
+		odometry.update(leftDelta, rightDelta, currentHeading);
+	}
+
+	prevLeftPos = currentLeftPos;
+	prevRightPos = currentRightPos;
 
 		prevLeftPos = currentLeftPos;
 		prevRightPos = currentRightPos;
