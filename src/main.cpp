@@ -48,6 +48,8 @@ void calibrateIMU(void);
 extern bool matchAutonSide;
 
 const int		IMU_distance = 13;
+const double  kLoopMs = 10.0;
+const double  kLoopDt = 0.010;
 
 void intakeForwardPressed(void)
 {
@@ -245,6 +247,14 @@ void driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
 	double	error;
 	double	pidOutput;
 	double	driveSpeed;
+	double	startX, startY, startHeading;
+	double	headingPrevError, headingKp, headingKd, headingKi;
+	double	headingIntegral, headingIntegralLimit;
+	double	currentDriveSpeed, maxDeltaPerSec, slowZone;
+	double	decelK, minDecelScale, minApproachSpeed;
+	double	headingErrorFiltered, headingDeadband, headingFilterAlpha;
+	int	elapsedTimeMs;
+	double	dx, dy, headingRad, currentDist;
 
 	drivePID.reset();
 	drivePID.tolerance = 2.0;
@@ -293,13 +303,20 @@ void driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
 		if (driveSpeed >= 0)
 		{
 			leftSide.spin(forward);
+		}
 		else
+		{
 			leftSide.spin(reverse);
-			
-		if (rightSpeed >= 0)
+		}
+		
+		if (driveSpeed >= 0)
+		{
 			rightSide.spin(forward);
+		}
 		else
+		{
 			rightSide.spin(reverse);
+		}
 		
 		wait(kLoopMs, msec);
 		elapsedTimeMs += kLoopMs;
@@ -315,6 +332,9 @@ void turnWithPID(double targetHeading, int timeout = 3000)
 	double	error;
 	double	pidOutput;
 	double	turnSpeed;
+	double	currentTurnSpeed, maxTurnDeltaPerSec, turnSlowZone;
+	double	turnDecelK, minTurnSpeed;
+	double	requestingTurnSpeed;
 
 	turnPID.reset();
 	turnPID.tolerance = 1.0;
@@ -339,7 +359,7 @@ void turnWithPID(double targetHeading, int timeout = 3000)
 			break ;
 		}
 		pidOutput = turnPID.calculate(error, kLoopDt);
-		requestedTurnSpeed = clamp(pidOutput, -100.0, 100.0);
+		double requestedTurnSpeed = clamp(pidOutput, -100.0, 100.0);
 		// Smooth decel near target for gentle turn exit
 		if (std::abs(error) < turnSlowZone)
 		{
@@ -364,7 +384,7 @@ void turnWithPID(double targetHeading, int timeout = 3000)
 		turnSpeed = currentTurnSpeed;
 		leftSide.setVelocity(std::abs(turnSpeed), percent);
 		rightSide.setVelocity(std::abs(turnSpeed), percent);
-		if (turnSpeed >= 0)
+		if (turnSpeed >= 0.0)
 		{
 			leftSide.spin(forward);
 			rightSide.spin(reverse);
@@ -388,6 +408,12 @@ void updateOdometry(void)
 	double	currentHeading;
 	double	leftDist;
 	double	rightDist;
+	static double currentLeftPos = 0.0;
+	static double currentRightPos = 0.0;
+	static double leftDelta = 0.0;
+	static double rightDelta = 0.0;
+	static double prevLeftPos = 0.0;
+	static double prevRightPos = 0.0;
 
 	currentHeading = inertialSensor.rotation();
 	currentLeftPos = leftSide.position(vex::rotationUnits::rev) * 10.2;
