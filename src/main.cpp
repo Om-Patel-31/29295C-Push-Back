@@ -499,12 +499,12 @@ void	driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
 		driveWithPID(-40);
 		updateOdometry();
 
-		intakeMotor.spin(reverse);
-		outputMotor.spin(reverse);
-		wait(4000, msec);
-		intakeMotor.stop();
-		outputMotor.stop();
-		updateOdometry();
+intakeMotor.spin(reverse);
+outputMotor.spin(reverse);
+wait(4000, msec);
+intakeMotor.stop();
+outputMotor.stop();
+updateOdometry();
 
 		// CENTRE SCORING AND MATCH LOADER + LONG GOAL SCORING PSEUDOCODE
 		// drive forward
