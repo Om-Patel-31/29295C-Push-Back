@@ -506,12 +506,13 @@ void matchAutonRightAveryVersion(void)
 	updateOdometry();
 
 	driveWithPID(42);
+	matchLoaderToggle();
 	turnWithPID(180);
 	updateOdometry();
 
 	driveWithPID(14);
-	// intakeMotor.spin(reverse); //MATCH LOAD
-	wait(3000, msec);
+	intakeMotor.spin(reverse); //MATCH LOAD
+	wait(3000, msec); //need to tune this time to only suck up 3 balls
 	intakeMotor.stop();
 	turnWithPID(180);
 	driveWithPID(-38.5);
@@ -526,8 +527,6 @@ void matchAutonRightAveryVersion(void)
 
 	p = 3;
 	driveWithPID(-12);
-	wait(1000, msec);
-	updateOdometry();
 	driveWithPID(12);
 	updateOdometry();
 }
