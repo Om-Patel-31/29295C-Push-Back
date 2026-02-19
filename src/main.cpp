@@ -38,7 +38,7 @@ digital_out Pistons(Brain.ThreeWirePort.C);
 
 vex::inertial inertialSensor = vex::inertial(PORT21);
 
-PIDController	drivePID(5, 0.5, 0.01);
+PIDController	drivePID(2, 0.5, 0.01);
 PIDController	turnPID(0.5, 0.01, 0.05);
 OdometryTracker	odometry;
 
@@ -463,80 +463,6 @@ void turnWithPID(double targetHeading, int timeout = 3000)
 	rightSide.stop();
 }
 
-void turnWithPID(double targetHeading, int timeout = 3000)
-{
-	double elapsedTime;
-	double currentHeading;
-	double error;
-	double pidOutput;
-
-	turnPID.reset();
-	turnPID.tolerance = 1.0;
-	currentTurnSpeed = 0.0;
-	maxTurnDeltaPerSec = 80.0;
-	turnSlowZone = 15.0;
-	turnDecelK = 0.05;
-	minTurnSpeed = 6.0;
-	elapsedTime = 0;
-	while (elapsedTime < timeout)
-	{
-		currentHeading = inertialSensor.rotation();
-		error = targetHeading - currentHeading;
-		if (error > 180)
-			error -= 360;
-		if (error < -180)
-			error += 360;
-		if (turnPID.atTarget(error))
-		{
-			leftSide.stop();
-			rightSide.stop();
-			break;
-		}
-		pidOutput = turnPID.calculate(error, kLoopDt);
-		requestedTurnSpeed = clamp(pidOutput, -100.0, 100.0);
-		// Smooth decel near target for gentle turn exit
-		if (std::abs(error) < turnSlowZone)
-		{
-			double decelScale;
-
-			decelScale = std::exp(-0.10 * (turnSlowZone - std::abs(error)));
-			decelScale = std::fmax(0.90, decelScale);
-			requestedTurnSpeed *= decelScale;
-		}
-		// Smooth ramp for turn transitions
-		{
-			double maxDelta;
-
-			maxDelta = maxTurnDeltaPerSec * kLoopDt;
-			if (requestedTurnSpeed - currentTurnSpeed > maxDelta)
-				currentTurnSpeed += maxDelta;
-			else if (currentTurnSpeed - requestedTurnSpeed > maxDelta)
-				currentTurnSpeed -= maxDelta;
-			else
-				currentTurnSpeed = requestedTurnSpeed;
-		}
-		turnSpeed = currentTurnSpeed;
-		leftSide.setVelocity(std::abs(turnSpeed), percent);
-		rightSide.setVelocity(std::abs(turnSpeed), percent);
-		if (turnSpeed >= 0)
-		{
-			leftSide.spin(forward);
-			rightSide.spin(reverse);
-		}
-		else
-		{
-			leftSide.spin(reverse);
-			rightSide.spin(forward);
-		}
-		// Update odometry at 1 ms intervals during auton turns
-		updateOdometry();
-		vex::wait(kLoopMs, msec);
-		elapsedTime += kLoopMs;
-	}
-	leftSide.stop();
-	rightSide.stop();
-}
-
 // Forward declaration for skills autonomous
 void skillsAuton(void);
 
@@ -593,47 +519,33 @@ void matchAutonRightAveryVersion(void)
 	// reverse + line up with long goal
 	// release balls into long goal
 
-	driveWithPID(22);
+	driveWithPID(26);
 	turnWithPID(90);
 	updateOdometry();
 
-	driveWithPID(42);
+	driveWithPID(40);
+	matchLoaderToggle();
 	turnWithPID(180);
 	updateOdometry();
 
-	driveWithPID(14);
-	intakeMotor.spin(forward);
-	vex::wait(3000, msec);
+	driveWithPID(20);
+	intakeMotor.spin(reverse); //MATCH LOAD
+	wait(3000, msec); //need to tune this time to only suck up 3 balls
 	intakeMotor.stop();
 	turnWithPID(180);
-	driveWithPID(-40);
+	driveWithPID(-38.5);
 	updateOdometry();
 
 	intakeMotor.spin(reverse);
 	outputMotor.spin(reverse);
-	vex::wait(4000, msec);
+	wait(4000, msec);
 	intakeMotor.stop();
 	outputMotor.stop();
 	updateOdometry();
 
-	// CENTRE SCORING AND MATCH LOADER + LONG GOAL SCORING PSEUDOCODE
-	// drive forward
-	// turn right slightly
-	// drive forward
-	// intake
-	// turn left to face centre goal
-	// drive forward
-	// score in centre goal by reverse intaking
-	// drive backward
-	// spin 180deg
-	// drive forward
-	// turn right slightly
-	// drive forward
-	// intake from match loader
-	// drive backward
-	// spin 180
-	// drive forward
-	// intake to put balls in long goal
+	driveWithPID(-12);
+	driveWithPID(12);
+	updateOdometry();
 }
 
 void matchAutonLeft(void)
