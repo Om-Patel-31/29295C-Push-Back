@@ -500,7 +500,7 @@ void matchAutonRightAveryVersion(void)
 {
 	calibrateIMU();
 	resetEncoders();
-
+  
 	Brain.Screen.print("Avery Match Auton: RIGHT");
 
 	odometry.reset();
@@ -546,6 +546,14 @@ void matchAutonRightAveryVersion(void)
 	driveWithPID(-12);
 	driveWithPID(12);
 	updateOdometry();
+}
+
+void matchAutonRightNew()
+{
+	//pick up 3 balls
+	//match load 3 balls
+	//score 7 balls
+	//use descore to push balls to get control bonus
 }
 
 void matchAutonLeft(void)
