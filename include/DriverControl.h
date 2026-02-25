@@ -7,15 +7,14 @@
 // Driver input handling and shaping for differential-drive robots.
 //
 // Keep comments short: modes describe how controller axes map to
-// drivetrain commands. Inputs are read in percent (-100..100). Curves
-// and sensitivities let you tune responsiveness without changing motor code.
+// drivetrain commands. Inputs are read in percent (-100..100). Sensitivities
+// let you tune responsiveness without changing motor code.
 
 // Control scheme types
 enum class ControlType {
   ARCADE,           // Left stick Y = drive, Right stick X = turn
   TANK,             // Left stick Y = left side, Right stick Y = right side
   SPLIT_ARCADE,     // Left stick Y = drive, Left stick X = turn
-  CURVATURE,        // Arcade with velocity-based turn scaling
   SINGLE_STICK      // Single stick: Y = drive, X = turn
 };
 
@@ -32,21 +31,33 @@ private:
   int leftAxis;
   int rightAxis;
   
-  // Apply deadzone to joystick input
+  // Input filtering (smooths joystick noise)
+  double filteredDrive;
+  double filteredTurn;
+  double filteredLeft;
+  double filteredRight;
+  double filterAlpha; // Low-pass filter coefficient (0.1 = heavy smoothing, 0.5 = light)
+  
+  // Apply smooth deadzone with soft transition
+  double applyDeadzoneSoft(int value) {
+    double v = std::abs(value);
+    if (v < deadzone) return 0.0;
+    // Smooth cubic transition just above deadzone
+    if (v < deadzone + 10) {
+      double t = (v - deadzone) / 10.0;
+      return (value >= 0 ? 1.0 : -1.0) * t * t * (3.0 - 2.0 * t) * (v - deadzone);
+    }
+    return (double)value;
+  }
+  
+  // Legacy deadzone for backwards compatibility
   int applyDeadzone(int value) {
     return (std::abs(value) < deadzone) ? 0 : value;
   }
   
-  // Apply exponential curve to input
-  // Applies an exponential shaping curve to joystick percent input.
-  // - `inputPercent` expected in [-100,100].
-  // - `expo` >1 makes low inputs finer and high inputs stronger.
-  double applyCurve(double inputPercent, double expo) {
-    double v = std::fmin(std::fmax(inputPercent, -100.0), 100.0);
-    double sign = (v >= 0.0) ? 1.0 : -1.0;
-    double absNorm = std::abs(v) / 100.0;
-    double shaped = std::pow(absNorm, expo) * 100.0;
-    return sign * shaped;
+  // Apply direct linear scaling to joystick input.
+  double applyLinear(double inputPercent) {
+    return std::fmin(std::fmax(inputPercent, -100.0), 100.0);
   }
   
   // Clamp value to -100 to 100
@@ -64,7 +75,12 @@ public:
       deadzone(deadzoneThreshold),
       exponent(inputExponent),
       turnSensitivity(turnSens),
-      slowTurnSensitivity(slowTurnSens) {}
+      slowTurnSensitivity(slowTurnSens),
+      filteredDrive(0.0),
+      filteredTurn(0.0),
+      filteredLeft(0.0),
+      filteredRight(0.0),
+      filterAlpha(0.3) {} // 0.3 = smooth but responsive (like PROS)
 
   // Initialize default axis mapping based on control type
   void initDefaultAxes() {
@@ -97,6 +113,13 @@ public:
     }
   }
   
+  // Low-pass filter for smooth joystick input
+  // Removes jitter and high-frequency noise while preserving responsiveness
+  double lowPassFilter(double& filtered, double raw) {
+    filtered = filtered * (1.0 - filterAlpha) + raw * filterAlpha;
+    return filtered;
+  }
+  
   // Calculate motor outputs based on controller input
   // `calculate` reads the selected axes, applies deadzone and shaping,
   // scales turning by sensitivity, and writes final left/right outputs
@@ -110,41 +133,30 @@ public:
     switch (controlType) {
       case ControlType::ARCADE:
         // Left stick Y = drive, Right stick X = turn
-        drivePower = applyDeadzone(getAxisPosition(controller, driveAxis));
-        turnPower = applyDeadzone(getAxisPosition(controller, turnAxis));
+        drivePower = applyDeadzone((int)lowPassFilter(filteredDrive, getAxisPosition(controller, driveAxis)));
+        turnPower = applyDeadzone((int)lowPassFilter(filteredTurn, getAxisPosition(controller, turnAxis)));
         break;
         
       case ControlType::TANK:
         // Left stick Y = left side, Right stick Y = right side
         {
-          int leftPower = applyDeadzone(getAxisPosition(controller, leftAxis));
-          int rightPower = applyDeadzone(getAxisPosition(controller, rightAxis));
-          leftOutput = applyCurve(leftPower, exponent);
-          rightOutput = applyCurve(rightPower, exponent);
+          int leftPower = applyDeadzone((int)lowPassFilter(filteredLeft, getAxisPosition(controller, leftAxis)));
+          int rightPower = applyDeadzone((int)lowPassFilter(filteredRight, getAxisPosition(controller, rightAxis)));
+          leftOutput = applyLinear(leftPower);
+          rightOutput = applyLinear(rightPower);
           return; // Tank doesn't use drive/turn combination
         }
         
       case ControlType::SPLIT_ARCADE:
         // Left stick Y = drive, Left stick X = turn
-        drivePower = applyDeadzone(getAxisPosition(controller, driveAxis));
-        turnPower = applyDeadzone(getAxisPosition(controller, turnAxis));
-        break;
-        
-      case ControlType::CURVATURE:
-        // Arcade with velocity-based turn scaling
-        drivePower = applyDeadzone(getAxisPosition(controller, driveAxis));
-        turnPower = applyDeadzone(getAxisPosition(controller, turnAxis));
-        // Scale turn based on velocity for better control at low speeds
-        if (std::abs(drivePower) > 5) {
-          // reduce turn when driving fast: simple linear scale factor
-          turnPower = (int)(turnPower * (1.0 - std::abs(drivePower) / 200.0));
-        }
+        drivePower = applyDeadzone((int)lowPassFilter(filteredDrive, getAxisPosition(controller, driveAxis)));
+        turnPower = applyDeadzone((int)lowPassFilter(filteredTurn, getAxisPosition(controller, turnAxis)));
         break;
         
       case ControlType::SINGLE_STICK:
         // Right stick only: Y = drive, X = turn
-        drivePower = applyDeadzone(getAxisPosition(controller, driveAxis));
-        turnPower = applyDeadzone(getAxisPosition(controller, turnAxis));
+        drivePower = applyDeadzone((int)lowPassFilter(filteredDrive, getAxisPosition(controller, driveAxis)));
+        turnPower = applyDeadzone((int)lowPassFilter(filteredTurn, getAxisPosition(controller, turnAxis)));
         break;
     }
     
@@ -152,9 +164,9 @@ public:
     int activeTurnSens = slowTurn ? slowTurnSensitivity : turnSensitivity;
     int scaledTurn = (turnPower * activeTurnSens) / 100;
     
-    // Apply expo curve
-    double targetDrive = applyCurve(drivePower, exponent);
-    double targetTurn = applyCurve(scaledTurn, exponent);
+    // Apply linear input mapping
+    double targetDrive = applyLinear(drivePower);
+    double targetTurn = applyLinear(scaledTurn);
     
     // Calculate final outputs
     leftOutput = clamp(targetDrive + targetTurn);
@@ -183,6 +195,20 @@ public:
   double getExponent() const { return exponent; }
   int getTurnSensitivity() const { return turnSensitivity; }
   int getSlowTurnSensitivity() const { return slowTurnSensitivity; }
+  
+  // Filter control for input smoothing (0.1 = heavy smoothing, 0.5 = light)
+  void setFilterAlpha(double alpha) { 
+    filterAlpha = std::fmin(std::fmax(alpha, 0.1), 1.0); 
+  }
+  double getFilterAlpha() const { return filterAlpha; }
+  
+  // Reset to default sensitivity settings
+  void resetDefaults() {
+    exponent = 2.0;
+    turnSensitivity = 60;
+    slowTurnSensitivity = 50;
+    filterAlpha = 0.3;
+  }
 };
 
 #endif // DRIVERCONTROL_H

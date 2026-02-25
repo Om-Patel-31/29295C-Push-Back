@@ -1,15 +1,15 @@
 #include "DriverControl.h"
-#include "OdometryTracker.h"
-#include "PIDController.h"
+#include "Chassis.h"
 #include "vex.h"
 #include <cmath>
+
 
 using namespace	vex;
 
 competition		Competition;
 
 // DRIVER CONTROL CONFIGURATION - Change this to switch control schemes
-DriverControl	driverControl(ControlType::ARCADE, 10, 2.0, 60, 50);
+DriverControl	driverControl(ControlType::ARCADE, 10, 2.0, 50, 40);
 
 vex::brain Brain;
 vex::controller Controller1;
@@ -32,22 +32,22 @@ vex::motor intakeMotor(vex::PORT1, ratio6_1, true);
 vex::motor outputMotor(vex::PORT6, ratio6_1, false);
 vex::motor_group intakeGroup(intakeMotor, outputMotor);
 
-digital_out		Blocker(Brain.ThreeWirePort.A);
 digital_out		MatchLoader(Brain.ThreeWirePort.B);
-digital_out		Pistons(Brain.ThreeWirePort.C);
+digital_out		DeScorePiston(Brain.ThreeWirePort.A);
+digital_out		middleScore(Brain.ThreeWirePort.C);
 
 vex::inertial inertialSensor = vex::inertial(PORT21);
+Chassis chassis(leftSide, rightSide, inertialSensor);
 
-PIDController	drivePID(6.0, 0.10, 1.0);
-PIDController	turnPID(0.4, 0.01, 0.01);
-OdometryTracker	odometry;
+
+// Set this variable to choose which auton to run:
+// 0 = leftAuton, 1 = rightAuton, 2 = skillsAuton, 3 = skillsAuton2
+int selectedAuton = 3;
+
 
 // Forward declarations for functions defined later
-void			updateOdometry(void);
-void			calibrateIMU(void);
-extern bool		matchAutonSide;
-
-const int		IMU_distance = -7;
+void calibrateIMU(void);
+bool matchAutonRight = false;
 
 void	intakeForwardPressed(void)
 {
@@ -117,18 +117,10 @@ void	SpinBothReverseReleased(void)
 	outputReverseReleased();
 }
 
-bool			blockerExtended = false;
 bool			matchLoaderExtended = false;
-bool			pistonsExtended = false;
-
-void	blockerToggle(void)
-{
-	blockerExtended = !blockerExtended;
-	Blocker.set(blockerExtended);
-	Brain.Screen.clearLine(2);
-	Brain.Screen.setCursor(2, 1);
-	Brain.Screen.print("Blocker: %s", blockerExtended ? "EXT" : "CL");
-}
+bool			deScorePistonExtended = false;
+bool			middleScoreExtended = false;
+int			intakeOutputVelocity = 50;
 
 void	matchLoaderToggle(void)
 {
@@ -139,30 +131,32 @@ void	matchLoaderToggle(void)
 	Brain.Screen.print("MatchLD: %s", matchLoaderExtended ? "EXT" : "CL");
 }
 
-void	pistonsToggle(void)
+void	deScorePistonToggle(void)
 {
-	pistonsExtended = !pistonsExtended;
-	Pistons.set(pistonsExtended);
+	deScorePistonExtended = !deScorePistonExtended;
+	DeScorePiston.set(deScorePistonExtended);
 	Brain.Screen.clearLine(5);
 	Brain.Screen.setCursor(5, 1);
-	Brain.Screen.print("Pistons: %s", pistonsExtended ? "EXT" : "CL");
+	Brain.Screen.print("DeSc: %s", deScorePistonExtended ? "EXT" : "CL");
 }
 
-// Auton side selector handlers (Up = RIGHT, Down = LEFT)
-void	selectRightAuton(void)
+void	middleScoreToggle(void)
 {
-	matchAutonSide = true;
-	Brain.Screen.clearLine(2);
-	Brain.Screen.setCursor(2, 1);
-	Brain.Screen.print("Auton: RIGHT");
+	middleScoreExtended = !middleScoreExtended;
+	middleScore.set(middleScoreExtended);
+	Brain.Screen.clearLine(6);
+	Brain.Screen.setCursor(6, 1);
+	Brain.Screen.print("MidSc: %s", middleScoreExtended ? "EXT" : "CL");
 }
 
-void	selectLeftAuton(void)
+void	toggleIntakeOutputVelocity(void)
 {
-	matchAutonSide = false;
-	Brain.Screen.clearLine(2);
-	Brain.Screen.setCursor(2, 1);
-	Brain.Screen.print("Auton: LEFT");
+	intakeOutputVelocity = (intakeOutputVelocity == 50) ? 100 : 50;
+	intakeMotor.setVelocity(intakeOutputVelocity, percent);
+	outputMotor.setVelocity(intakeOutputVelocity, percent);
+	Brain.Screen.clearLine(7);
+	Brain.Screen.setCursor(7, 1);
+	Brain.Screen.print("Velocity: %d%%", intakeOutputVelocity);
 }
 
 template <typename T> static T clamp(T value, T minVal, T maxVal)
@@ -172,6 +166,15 @@ template <typename T> static T clamp(T value, T minVal, T maxVal)
 	if (value < minVal)
 		return (minVal);
 	return (value);
+}
+
+static double	normalizeAngleDeg(double angle)
+{
+	while (angle > 180.0)
+		angle -= 360.0;
+	while (angle < -180.0)
+		angle += 360.0;
+	return (angle);
 }
 
 void	increaseExpo(void)
@@ -232,416 +235,137 @@ void	decreaseTurnSens(void)
 	}
 }
 
-void	driveWithPID(double targetDist, int velocity = 100, int timeout = 5000,
-		bool useDistanceSensor = false)
-{
-	const double	kLoopDt = 0.01;
-	const int		kLoopMs = 10;
-	double			startX;
-	double			startY;
-	double			startHeading;
-	int				elapsedTimeMs;
-	double			currentDist;
-	double			error;
-	double			pidOutput;
-	double			driveSpeed;
-	double			dx;
-	double			dy;
-	double			headingRad;
-	double			headingError;
-	double			headingCorrection;
-	double			leftSpeed;
-	double			rightSpeed;
-	double			currentHeading;
-	double			correctionLimit;
-	double			headingPrevError;
-	double			headingKp;
-	double			headingKd;
-	double			headingKi;
-	double			headingIntegral;
-	double			headingIntegralLimit;
-	double			currentDriveSpeed;
-	double			maxDeltaPerSec;
-	double			slowZone;
-	double			decelK;
-	double			minDecelScale;
-	double			minApproachSpeed;
-	double			headingErrorFiltered;
-	double			headingDeadband;
-	double			headingFilterAlpha;
-			double decelScale;
 
-	drivePID.reset();
-	drivePID.tolerance = 2.0;
-	startX = odometry.x;
-	startY = odometry.y;
-	startHeading = odometry.heading;
-	headingPrevError = 0.0;
-	headingKp = 0.40;
-	headingKd = 0.05;
-	headingKi = 0.03;
-	headingIntegral = 0.0;
-	headingIntegralLimit = 15.0;
-	currentDriveSpeed = 0.0;
-	maxDeltaPerSec = 80.0;
-	slowZone = 10.0;
-	decelK = 0.05;
-	minDecelScale = 0.45;
-	minApproachSpeed = 6.0;
-	headingErrorFiltered = 0.0;
-	headingDeadband = 0.5;
-	headingFilterAlpha = 0.2;
-	elapsedTimeMs = 0;
-	while (elapsedTimeMs < timeout)
-	{
-		// Update odometry first to get accurate position
-		updateOdometry();
-		// Calculate signed distance along the initial heading direction
-		dx = odometry.x - startX;
-		dy = odometry.y - startY;
-		headingRad = startHeading * M_PI / 180.0;
-		currentDist = dx * std::cos(headingRad) + dy * std::sin(headingRad);
-		error = targetDist - currentDist;
-		if (drivePID.atTarget(error))
-		{
-			leftSide.stop(coast);
-			rightSide.stop(coast);
-			break ;
-		}
-		pidOutput = drivePID.calculate(error, kLoopDt);
-		driveSpeed = clamp(pidOutput, -static_cast<double>(velocity),
-				static_cast<double>(velocity));
-		// Apply PID speed directly without slew limiting
-		currentDriveSpeed = driveSpeed;
-		// Minimal slow-down near target for smooth turn entry
-		if (std::abs(error) < slowZone)
-		{
-			decelScale = std::exp(-0.10 * (slowZone - std::abs(error)));
-			decelScale = std::fmax(0.90, decelScale);
-			currentDriveSpeed *= decelScale;
-		}
-		// Enforce minimum speed to prevent stalling
-		if (std::abs(currentDriveSpeed) < 5.0 && std::abs(error) > 0.5)
-			currentDriveSpeed = (currentDriveSpeed >= 0.0) ? 5.0 : -5.0;
-		// Calculate heading error (IMU) and apply correction to keep robot straight
-		currentHeading = inertialSensor.rotation();
-		headingError = currentHeading - startHeading;
-		if (headingError > 180)
-			headingError -= 360;
-		if (headingError < -180)
-			headingError += 360;
-		if (std::abs(headingError) < headingDeadband)
-			headingError = 0.0;
-		headingErrorFiltered = (headingErrorFiltered * (1.0
-					- headingFilterAlpha)) + (headingError
-				* headingFilterAlpha);
-		// PID heading correction scaled by drive speed
-		headingIntegral += headingErrorFiltered * kLoopDt;
-		headingIntegral = clamp(headingIntegral, -headingIntegralLimit,
-				headingIntegralLimit);
-		headingCorrection = (headingErrorFiltered * headingKp)
-			+ ((headingErrorFiltered - headingPrevError) / kLoopDt) * headingKd
-			+ (headingIntegral * headingKi);
-		correctionLimit = std::fmax(4.0, std::abs(currentDriveSpeed) * 0.3);
-		headingCorrection = clamp(headingCorrection, -correctionLimit,
-				correctionLimit);
-		headingPrevError = headingErrorFiltered;
-		leftSpeed = currentDriveSpeed - headingCorrection;
-		rightSpeed = currentDriveSpeed + headingCorrection;
-		// Apply speed to motors with heading correction
-		leftSide.setVelocity(std::abs(leftSpeed), percent);
-		rightSide.setVelocity(std::abs(rightSpeed), percent);
-		if (leftSpeed >= 0)
-			leftSide.spin(forward);
-		else
-			leftSide.spin(reverse);
-		if (rightSpeed >= 0)
-			rightSide.spin(forward);
-		else
-			rightSide.spin(reverse);
-		wait(kLoopMs, msec);
-		elapsedTimeMs += kLoopMs;
-	}
-	leftSide.stop();
-	rightSide.stop();
+// New high-level chassis API wrappers for compatibility
+// drive with optional inline PID tuning
+void drive(double dist, int velocity = 100, int timeout = 5000,
+				  double kP = NAN, double kI = NAN, double kD = NAN) {
+	chassis.drive(dist, velocity, timeout, kP, kI, kD);
 }
-
-void	turnWithPID(double targetHeading, int timeout = 3000)
-{
-	const double	kLoopDt = 0.01;
-	const int		kLoopMs = 10;
-	double			elapsedTime;
-	double			currentHeading;
-	double			error;
-	double			pidOutput;
-	double			turnSpeed;
-	double			requestedTurnSpeed;
-	double			currentTurnSpeed;
-	double			maxTurnDeltaPerSec;
-	double			turnSlowZone;
-	double			turnDecelK;
-	double			minTurnSpeed;
-			double decelScale;
-			double maxDelta;
-
-	turnPID.reset();
-	turnPID.tolerance = 1.0;
-	currentTurnSpeed = 0.0;
-	maxTurnDeltaPerSec = 80.0;
-	turnSlowZone = 15.0;
-	turnDecelK = 0.05;
-	minTurnSpeed = 6.0;
-	elapsedTime = 0;
-	while (elapsedTime < timeout)
-	{
-		currentHeading = inertialSensor.rotation();
-		error = targetHeading - currentHeading;
-		if (error > 180)
-			error -= 360;
-		if (error < -180)
-			error += 360;
-		if (turnPID.atTarget(error))
-		{
-			leftSide.stop(coast);
-			rightSide.stop(coast);
-			break ;
-		}
-		pidOutput = turnPID.calculate(error, kLoopDt);
-		requestedTurnSpeed = clamp(pidOutput, -100.0, 100.0);
-		// Smooth decel near target for gentle turn exit
-		if (std::abs(error) < turnSlowZone)
-		{
-			decelScale = std::exp(-0.10 * (turnSlowZone - std::abs(error)));
-			decelScale = std::fmax(0.90, decelScale);
-			requestedTurnSpeed *= decelScale;
-		}
-		// Smooth ramp for turn transitions
-		{
-			maxDelta = maxTurnDeltaPerSec * kLoopDt;
-			if (requestedTurnSpeed - currentTurnSpeed > maxDelta)
-				currentTurnSpeed += maxDelta;
-			else if (currentTurnSpeed - requestedTurnSpeed > maxDelta)
-				currentTurnSpeed -= maxDelta;
-			else
-				currentTurnSpeed = requestedTurnSpeed;
-		}
-		turnSpeed = currentTurnSpeed;
-		leftSide.setVelocity(std::abs(turnSpeed), percent);
-		rightSide.setVelocity(std::abs(turnSpeed), percent);
-		if (turnSpeed >= 0)
-		{
-			leftSide.spin(forward);
-			rightSide.spin(reverse);
-		}
-		else
-		{
-			leftSide.spin(reverse);
-			rightSide.spin(forward);
-		}
-		// Update odometry at 1 ms intervals during auton turns
-		updateOdometry();
-		wait(kLoopMs, msec);
-		elapsedTime += kLoopMs;
-	}
-	leftSide.stop();
-	rightSide.stop();
+// turn with optional inline PID tuning
+void turn(double heading, int timeout = 3000,
+				 double kP = NAN, double kI = NAN, double kD = NAN) {
+	chassis.turn(heading, timeout, kP, kI, kD);
 }
-
-void	updateOdometry(void)
-{
-	static double	prevLeftPos = 0.0;
-	static double	prevRightPos = 0.0;
-	double			currentHeading;
-	double			currentLeftPos;
-	double			currentRightPos;
-	double			leftDelta;
-	double			rightDelta;
-
-	currentHeading = inertialSensor.rotation();
-	currentLeftPos = leftSide.position(vex::rotationUnits::rev) * 10.2;
-	currentRightPos = rightSide.position(vex::rotationUnits::rev) * 10.2;
-	leftDelta = currentLeftPos - prevLeftPos;
-	rightDelta = currentRightPos - prevRightPos;
-	// Only suppress distance if wheels are moving in opposite directions (pure rotation)
-	// If motors move in the same direction, report the distance (even if curved)
-	if (leftDelta * rightDelta < 0) // Opposite signs = opposite directions
-	{
-		// Pure rotation: suppress distance update
-		odometry.update(0.0, 0.0, currentHeading);
-	}
-	else
-	{
-		// Same direction or one wheel stopped: report the movement
-		odometry.update(leftDelta, rightDelta, currentHeading);
-	}
-	prevLeftPos = currentLeftPos;
-	prevRightPos = currentRightPos;
+// moveToPoint with optional heading and inline PID tuning
+void moveToPoint(
+	double x, double y, double heading = NAN, int velocity = 100, int timeout = 5000,
+	double drive_kP = NAN, double drive_kI = NAN, double drive_kD = NAN,
+	double turn_kP = NAN, double turn_kI = NAN, double turn_kD = NAN,
+	double curve_kP = NAN, double curve_kI = NAN, double curve_kD = NAN
+) {
+	chassis.moveToPoint(x, y, heading, velocity, timeout,
+		drive_kP, drive_kI, drive_kD,
+		turn_kP, turn_kI, turn_kD,
+		curve_kP, curve_kI, curve_kD);
 }
-
-void	resetEncoders(void)
-{
-	leftSide.resetPosition();
-	rightSide.resetPosition();
-	intakeGroup.resetPosition();
+void resetEncoders(void) {
+    chassis.left.resetPosition();
+    chassis.right.resetPosition();
+    intakeGroup.resetPosition();
+    chassis.odom.reset();
 }
-
-bool			skillsMode = true;
-bool			matchAutonSide = false;
-bool			autonTestActive = false;
 
 // --------------------
 // AUTON FUNCTIONS
 // --------------------
 // Forward declaration for skills autonomous
 void			skillsAuton(void);
+void			backupSkills(void);
 
-void	matchAutonRight(void)
-{
-	calibrateIMU();
-	Brain.Screen.clearLine(3);
-	Brain.Screen.setCursor(3, 1);
-	Brain.Screen.print("Match Auton: RIGHT");
-	resetEncoders();
-	odometry.reset();
-	drivePID.reset();
-	turnPID.reset();
-	matchLoaderToggle();
-	intakeGroup.spin(forward);
-	driveWithPID(std::sqrt(2275.0) - IMU_distance);
-	updateOdometry();
-	turnWithPID(20);
-	driveWithPID(5);
-	intakeGroup.spin(forward);
-	matchLoaderToggle();
-	driveWithPID(5);
-	intakeGroup.spin(forward);
-	wait(4000, msec);
-	matchLoaderToggle();
-	driveWithPID(8);
-	turnWithPID(-40);
-	driveWithPID(14);
-	intakeGroup.spin(reverse);
-	wait(5000, msec);
-	Controller1.rumble(".-");
+
+void matchAutonRightRoutine(void) {
+    calibrateIMU();
+    resetEncoders();
+    chassis.reset();
+    // Example: drive forward, curve to point, turn
+    matchLoaderToggle();
+    drive(45, 75, 5000);
+    intakeMotor.spin(reverse);
+    turn(90.0);
+    moveToPoint(60, 30, 75, 4000); // Example curve
+    wait(2000, msec);
+    intakeMotor.stop();
+    drive(-30);
+    intakeMotor.spin(reverse);
+    outputMotor.spin(reverse);
+    wait(2000, msec);
+    intakeMotor.stop();
+    outputMotor.stop();
+    matchLoaderToggle();
+    Controller1.rumble(".-");
 }
 
-void	matchAutonLeft(void)
-{
-	Brain.Screen.clearLine(3);
-	Brain.Screen.setCursor(3, 1);
-	Brain.Screen.print("Match Auton: LEFT");
-	resetEncoders();
-	odometry.reset();
-	drivePID.reset();
-	turnPID.reset();
-	matchLoaderToggle();
-	intakeGroup.spin(forward);
-	driveWithPID(std::sqrt(2275.0) - IMU_distance);
-	updateOdometry();
-	turnWithPID(-20);
-	driveWithPID(5);
-	intakeGroup.spin(forward);
-	matchLoaderToggle();
-	driveWithPID(5);
-	intakeGroup.spin(forward);
-	wait(3000, msec);
-	matchLoaderToggle();
-	driveWithPID(8);
-	turnWithPID(45);
-	blockerToggle();
-	driveWithPID(14);
-	intakeGroup.spin(forward);
-	wait(5000, msec);
+
+void matchAutonLeftRoutine(void) {
+    calibrateIMU();
+    resetEncoders();
+    chassis.reset();
+    matchLoaderToggle();
+    drive(43.5, 75, 5000);
+    turn(-90.0);
+    intakeMotor.setVelocity(100, percent);
+    intakeMotor.spin(reverse);
+    moveToPoint(10, 40, 75, 3000); // Example curve
+    wait(1500, msec);
+    intakeMotor.stop();
+    drive(-35);
+    intakeMotor.spin(reverse);
+    outputMotor.spin(reverse);
+    wait(3000, msec);
+    outputMotor.stop();
+    intakeMotor.stop();
+    Controller1.rumble(".-");
 }
 
-void	skillsAuton(void)
-{
-	// Generated VEX C++ code for skillsAuton()
-	// Copy and paste this into your skillsAuton() function
-	// Starting position: (28.00", 85.00") @ 0°
-	// IMU offset from center: 7.00" (forward)
-	// Calibration offsets: X=4.00", Y=0.50"
-	calibrateIMU();
-	resetEncoders();
-	odometry.reset();
-	drivePID.reset();
-	turnPID.reset();
-	driveWithPID(43);
 
-	turnWithPID(90.0);
+void skillsAuton(void) {
+    calibrateIMU();
+    resetEncoders();
+    chassis.reset();
+    intakeMotor.setVelocity(100, percent);
+    intakeMotor.spin(reverse);
+    drive(60, 100, 4000, 2.5, 0.01, 0.5);
 	matchLoaderToggle();
-	intakeMotor.spin(forward);
-	driveWithPID(8.5);
-	wait(4000, msec);
-	intakeMotor.stop();
+    drive(30, 100, 5000, 5, 0.1, 1.0);
+	matchLoaderToggle();
+    Controller1.rumble(".-");
+}
 
-	driveWithPID(-16);
+void skillsAuton2(void) {
+    calibrateIMU();
+    resetEncoders();
+    chassis.reset();
+	intakeMotor.setVelocity(100, percent);
 
-	turnWithPID(180.0);
-	driveWithPID(30);
-
-	turnWithPID(270.0);
-	driveWithPID(107);
-
-	turnWithPID(0.0);
-	driveWithPID(29);
-
-	turnWithPID(270.0);
-	driveWithPID(-17);
-	intakeMotor.spin(fwd);
-	outputMotor.spin(fwd);
-	wait(4000, msec);
-	intakeMotor.stop();
-	outputMotor.stop();
+	matchLoaderToggle();
+	drive(44, 75, 5000);
+    turn(90.0);
+	intakeMotor.spin(reverse);
+	drive(12, 60, 5000);
 	
 	matchLoaderToggle();
-	intakeMotor.spin(fwd);
-	driveWithPID(27);
-	wait(4000, msec);
 	intakeMotor.stop();
-	
-	driveWithPID(-31.75);
-	intakeMotor.spin(fwd);
-	outputMotor.spin(fwd);
-	wait(4000, msec);
-	intakeMotor.stop();
-	outputMotor.stop();
-	
-	driveWithPID(17);
-	
-	turnWithPID(180);
-	driveWithPID(125);
-	
-	turnWithPID(270);
-	matchLoaderToggle();
-	intakeMotor.spin(fwd);
-	driveWithPID(22);
-	wait(4000, msec);
-	intakeMotor.stop();
-	
-	driveWithPID(-28.5);
-	intakeMotor.spin(fwd);
-	outputMotor.spin(fwd);
-	wait(4000, msec);
-	intakeMotor.stop();
-	outputMotor.stop();
-	
-	driveWithPID(15);
-	
-	turnWithPID(0.0);
-	driveWithPID(28);
-	
-	turnWithPID(90.0);
-	driveWithPID(100);
-	
-	turnWithPID(0.0);
-	driveWithPID(32);
-	
-	turnWithPID(90.0);
-	intakeMotor.spin(fwd);
-	outputMotor.spin(fwd);
-	driveWithPID(35);
-	Controller1.rumble(".−");
+	drive(-15.0);
+	// turn(-15);
+	// drive(10);
+    // turn(-90.0);
+	// drive(120);
+    // turn(-135.0);
+	// drive(10);
+    // turn(-90.0);
+	// drive(-25);
+	// intakeMotor.spin(reverse);
+	// outputMotor.spin(reverse);
+	// wait(4000);
+	// intakeMotor.stop();
+	// outputMotor.stop();
+	// matchLoaderToggle();
+	// drive(30);
+	// intakeMotor.spin(reverse);
+
+
+    Controller1.rumble(".-");
 }
 
 // --------------------
@@ -667,43 +391,48 @@ void	calibrateIMU(void)
 void	pre_auton(void)
 {
 	// Force default to LEFT auton at startup
-	matchAutonSide = false;
-	Brain.Screen.clearScreen();
-	Brain.Screen.setCursor(1, 1);
-	Brain.Screen.print("Mode: %s", skillsMode ? "SKILLS" : "MATCH");
-	Brain.Screen.setCursor(2, 1);
-	Brain.Screen.print("Auton: %s", matchAutonSide ? "RIGHT" : "LEFT");
+	matchAutonRight = false;
+	matchLoaderExtended = false;
+	MatchLoader.set(false);
 	leftSide.setStopping(vex::brakeType::coast);
 	rightSide.setStopping(vex::brakeType::coast);
 	intakeMotor.setStopping(vex::brakeType::brake);
 	outputMotor.setStopping(vex::brakeType::brake);
-	intakeMotor.setVelocity(100, percent);
+	intakeMotor.setVelocity(50, percent);
 	outputMotor.setVelocity(100, percent);
 	calibrateIMU();
-	Controller1.ButtonR1.pressed(intakeReversePressed);
-	Controller1.ButtonR1.released(intakeReverseReleased);
-	Controller1.ButtonR2.pressed(intakeForwardPressed);
-	Controller1.ButtonR2.released(intakeForwardReleased);
+	Controller1.ButtonR1.pressed(intakeForwardPressed);
+	Controller1.ButtonR1.released(intakeForwardReleased);
+	Controller1.ButtonR2.pressed(intakeReversePressed);
+	Controller1.ButtonR2.released(intakeReverseReleased);
 	Controller1.ButtonL1.pressed(outputForwardPressed);
 	Controller1.ButtonL1.released(outputForwardReleased);
 	Controller1.ButtonL2.pressed(outputReversePressed);
 	Controller1.ButtonL2.released(outputReverseReleased);
-	Controller1.ButtonA.pressed(blockerToggle);
-	Controller1.ButtonB.pressed(matchLoaderToggle);
-	Controller1.ButtonX.pressed(pistonsToggle);
-	Controller1.ButtonUp.pressed(selectRightAuton);
-	Controller1.ButtonDown.pressed(selectLeftAuton);
+	Controller1.ButtonX.pressed(matchLoaderToggle);
+	Controller1.ButtonA.pressed(deScorePistonToggle);
+	Controller1.ButtonB.pressed(middleScoreToggle);
+	Controller1.ButtonUp.pressed(toggleIntakeOutputVelocity);
 }
 
-void	autonomous(void)
-{
-	calibrateIMU();
-	if (skillsMode)
-		skillsAuton();
-	else if (matchAutonSide)
-		matchAutonRight();
-	else
-		matchAutonLeft();
+void	autonomous(void) {
+	switch (selectedAuton) {
+		case 0:
+			matchAutonLeftRoutine();
+			break;
+		case 1:
+			matchAutonRightRoutine();
+			break;
+		case 2:
+			skillsAuton();
+			break;
+		case 3:
+			skillsAuton2();
+			break;
+		default:
+			matchAutonLeftRoutine();
+			break;
+	}
 }
 
 void	trackHandPush(void)
@@ -720,13 +449,13 @@ void	trackHandPush(void)
 	Brain.Screen.print("Press Y for result");
 	// Reset tracking
 	resetEncoders();
-	odometry.reset();
+	chassis.odom.reset();
 	tracking = true;
 	// Track until Y button is pressed
 	while (tracking)
 	{
 		// Update odometry
-		updateOdometry();
+		chassis.updateOdometry();
 		// Check for result signal
 		if (Controller1.ButtonY.pressing())
 		{
@@ -736,72 +465,53 @@ void	trackHandPush(void)
 		wait(10, msec);
 	}
 	// Show final result
-	distanceTraveled = std::sqrt(odometry.x * odometry.x + odometry.y
-			* odometry.y);
-	Controller1.Screen.clearScreen();
-	Controller1.Screen.setCursor(1, 1);
-	Controller1.Screen.print("Distance: %.2f in", distanceTraveled);
-	Controller1.Screen.setCursor(2, 1);
-	Controller1.Screen.print("X: %.2f Y: %.2f", odometry.x, odometry.y);
-	Controller1.Screen.setCursor(3, 1);
-	Controller1.Screen.print("Heading: %.1f", odometry.heading);
+	    distanceTraveled = std::sqrt(chassis.odom.x * chassis.odom.x + chassis.odom.y * chassis.odom.y);
+	    Controller1.Screen.clearScreen();
+	    Controller1.Screen.setCursor(1, 1);
+	    Controller1.Screen.print("Distance: %.2f in", distanceTraveled);
+	    Controller1.Screen.setCursor(2, 1);
+	    Controller1.Screen.print("X: %.2f Y: %.2f", chassis.odom.x, chassis.odom.y);
+	    Controller1.Screen.setCursor(3, 1);
+	    Controller1.Screen.print("Heading: %.1f", chassis.odom.heading);
 }
 
-void	usercontrol(void)
-{
-	double	leftOutput;
-	double	rightOutput;
-	int		lastTelemetryMs;
-	bool	slowTurn;
-	int		currentMs;
 
-	// IMU already calibrated in pre_auton, no need to recalibrate
-	odometry.reset();
-	leftOutput = 0.0;
-	rightOutput = 0.0;
-	lastTelemetryMs = Brain.timer(msec);
-	while (1)
-	{
-		// Toggle between skills and match mode
-		if (Controller1.ButtonLeft.pressing())
-		{
-			skillsMode = !skillsMode;
-			Brain.Screen.clearScreen();
-			Brain.Screen.setCursor(1, 1);
-			Brain.Screen.print("Mode: %s", skillsMode ? "SKILLS" : "MATCH");
-			wait(300, msec);
+void usercontrol(void) {
+	while (true) {
+		// Split arcade: left stick Y for forward/back, right stick X for turning
+		double forward = Controller1.Axis3.position();
+		double turn = Controller1.Axis1.position();
+		double leftPower = forward + turn;
+		double rightPower = forward - turn;
+		chassis.left.setVelocity(leftPower, percent);
+		chassis.right.setVelocity(rightPower, percent);
+		// Stop motors if no input
+		if (std::abs(leftPower) < 0.5 && std::abs(rightPower) < 0.5) {
+			chassis.left.stop(coast);
+			chassis.right.stop(coast);
+		} else {
+			chassis.left.spin((leftPower >= 0.0) ? vex::forward : vex::reverse);
+			chassis.right.spin((rightPower >= 0.0) ? vex::forward : vex::reverse);
 		}
-		// Hand push tracking mode (hold L1)
-		if (Controller1.ButtonL1.pressing())
-		{
-			trackHandPush();
-			Brain.Screen.clearScreen();
-		}
-		// Get driver control outputs (ButtonY for slow turn mode)
-		slowTurn = Controller1.ButtonY.pressing();
-		driverControl.calculate(Controller1, leftOutput, rightOutput, slowTurn);
-		leftSide.setVelocity(std::abs(leftOutput), percent);
-		rightSide.setVelocity(std::abs(rightOutput), percent);
-		if (std::abs(leftOutput) < 0.5 && std::abs(rightOutput) < 0.5)
-		{
-			leftSide.stop(coast);
-			rightSide.stop(coast);
-		}
-		else
-		{
-			leftSide.spin(leftOutput >= 0.0 ? forward : reverse);
-			rightSide.spin(rightOutput >= 0.0 ? forward : reverse);
-		}
-		// Optional telemetry display every 100ms
-		currentMs = Brain.timer(msec);
-		if (currentMs - lastTelemetryMs > 100)
-		{
-			Brain.Screen.setCursor(3, 1);
-			Brain.Screen.print("L:%.1f R:%.1f   ", leftOutput, rightOutput);
-			lastTelemetryMs = currentMs;
-		}
-		wait(20, msec);
+		vex::wait(20, vex::msec);
 	}
+}
+
+// ============================================
+// BACKUP: Original skillsMode and skillsAuton
+// ============================================
+
+// Backup skillsAuton function
+void	backupSkills(void)
+{
+	calibrateIMU();
+	resetEncoders();
+	chassis.odom.reset();
+	chassis.drivePID.reset();
+	chassis.turnPID.reset();
+
+	intakeMotor.spin(fwd);
+	drive(70, 50, 5000);
 }
 
 int	main(void)
