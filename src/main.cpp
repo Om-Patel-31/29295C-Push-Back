@@ -6,7 +6,7 @@
 
 using namespace	vex;
 
-competition		Competition;
+competition Competition;
 
 // DRIVER CONTROL CONFIGURATION - Change this to switch control schemes
 DriverControl	driverControl(ControlType::ARCADE, 10, 2.0, 50, 40);
@@ -49,43 +49,43 @@ int selectedAuton = 3;
 void calibrateIMU(void);
 bool matchAutonRight = false;
 
-void	intakeForwardPressed(void)
+void intakeForwardPressed(void)
 {
 	intakeMotor.spin(forward);
 }
-void	intakeForwardReleased(void)
+void intakeForwardReleased(void)
 {
 	if (!Controller1.ButtonR2.pressing())
 	{
 		intakeMotor.stop();
 	}
 }
-void	intakeReversePressed(void)
+void intakeReversePressed(void)
 {
 	intakeMotor.spin(reverse);
 }
-void	intakeReverseReleased(void)
+void intakeReverseReleased(void)
 {
 	if (!Controller1.ButtonR1.pressing())
 		intakeMotor.stop();
 }
 
-void	outputForwardPressed(void)
+void outputForwardPressed(void)
 {
 	outputMotor.spin(forward);
 }
-void	outputForwardReleased(void)
+void outputForwardReleased(void)
 {
 	if (!Controller1.ButtonL2.pressing())
 	{
 		outputMotor.stop();
 	}
 }
-void	outputReversePressed(void)
+void outputReversePressed(void)
 {
 	outputMotor.spin(reverse);
 }
-void	outputReverseReleased(void)
+void outputReverseReleased(void)
 {
 	if (!Controller1.ButtonL1.pressing())
 	{
@@ -93,25 +93,25 @@ void	outputReverseReleased(void)
 	}
 }
 
-void	SpinBothForwardPressed(void)
+void SpinBothForwardPressed(void)
 {
 	intakeForwardPressed();
 	outputForwardPressed();
 }
 
-void	SpinBothForwardReleased(void)
+void SpinBothForwardReleased(void)
 {
 	intakeForwardReleased();
 	outputForwardReleased();
 }
 
-void	SpinBothReversePressed(void)
+void SpinBothReversePressed(void)
 {
 	intakeReversePressed();
 	outputReversePressed();
 }
 
-void	SpinBothReverseReleased(void)
+void SpinBothReverseReleased(void)
 {
 	intakeReverseReleased();
 	outputReverseReleased();
@@ -122,7 +122,7 @@ bool			deScorePistonExtended = false;
 bool			middleScoreExtended = false;
 int			intakeOutputVelocity = 50;
 
-void	matchLoaderToggle(void)
+void matchLoaderToggle(void)
 {
 	matchLoaderExtended = !matchLoaderExtended;
 	MatchLoader.set(matchLoaderExtended);
@@ -159,7 +159,8 @@ void	toggleIntakeOutputVelocity(void)
 	Brain.Screen.print("Velocity: %d%%", intakeOutputVelocity);
 }
 
-template <typename T> static T clamp(T value, T minVal, T maxVal)
+template <typename T>
+static T clamp(T value, T minVal, T maxVal)
 {
 	if (value > maxVal)
 		return (maxVal);
@@ -179,37 +180,35 @@ static double	normalizeAngleDeg(double angle)
 
 void	increaseExpo(void)
 {
-	double	currentExpo;
+	double currentExpo;
 
 	currentExpo = driverControl.getExponent();
 	if (currentExpo < 5.0)
 	{
-		driverControl.setExponent(std::round((currentExpo + 0.1) * 100.0)
-			/ 100.0);
+		driverControl.setExponent(std::round((currentExpo + 0.1) * 100.0) / 100.0);
 		Controller1.Screen.clearLine(3);
 		Controller1.Screen.setCursor(3, 1);
 		Controller1.Screen.print("Expo: %.2f", driverControl.getExponent());
 	}
 }
 
-void	decreaseExpo(void)
+void decreaseExpo(void)
 {
-	double	currentExpo;
+	double currentExpo;
 
 	currentExpo = driverControl.getExponent();
 	if (currentExpo > 1.0)
 	{
-		driverControl.setExponent(std::round((currentExpo - 0.1) * 100.0)
-			/ 100.0);
+		driverControl.setExponent(std::round((currentExpo - 0.1) * 100.0) / 100.0);
 		Controller1.Screen.clearLine(3);
 		Controller1.Screen.setCursor(3, 1);
 		Controller1.Screen.print("Expo: %.2f", driverControl.getExponent());
 	}
 }
 
-void	increaseTurnSens(void)
+void increaseTurnSens(void)
 {
-	int	currentSens;
+	int currentSens;
 
 	currentSens = driverControl.getTurnSensitivity();
 	if (currentSens < 100)
@@ -221,9 +220,9 @@ void	increaseTurnSens(void)
 	}
 }
 
-void	decreaseTurnSens(void)
+void decreaseTurnSens(void)
 {
-	int	currentSens;
+	int currentSens;
 
 	currentSens = driverControl.getTurnSensitivity();
 	if (currentSens > 10)
@@ -371,7 +370,7 @@ void skillsAuton2(void) {
 // --------------------
 // PRE-AUTON
 // --------------------
-void	calibrateIMU(void)
+void calibrateIMU(void)
 {
 	Brain.Screen.clearScreen();
 	Brain.Screen.setCursor(1, 1);
@@ -379,16 +378,16 @@ void	calibrateIMU(void)
 	inertialSensor.calibrate();
 	while (inertialSensor.isCalibrating())
 	{
-		wait(5, msec);
+		vex::wait(5, msec);
 	}
 	Brain.Screen.clearLine(1);
 	Brain.Screen.setCursor(1, 1);
 	Brain.Screen.print("IMU Ready");
 	Controller1.Screen.print("IMU Ready");
-	wait(20, msec);
+	vex::wait(20, msec);
 }
 
-void	pre_auton(void)
+void pre_auton(void)
 {
 	// Force default to LEFT auton at startup
 	matchAutonRight = false;
@@ -435,10 +434,10 @@ void	autonomous(void) {
 	}
 }
 
-void	trackHandPush(void)
+void trackHandPush(void)
 {
-	double	distanceTraveled;
-	bool	tracking;
+	double distanceTraveled;
+	bool tracking;
 
 	Brain.Screen.clearScreen();
 	Brain.Screen.setCursor(1, 1);
@@ -447,10 +446,12 @@ void	trackHandPush(void)
 	Brain.Screen.print("Tracking...");
 	Brain.Screen.setCursor(3, 1);
 	Brain.Screen.print("Press Y for result");
+
 	// Reset tracking
 	resetEncoders();
 	chassis.odom.reset();
 	tracking = true;
+
 	// Track until Y button is pressed
 	while (tracking)
 	{
@@ -460,10 +461,12 @@ void	trackHandPush(void)
 		if (Controller1.ButtonY.pressing())
 		{
 			tracking = false;
-			wait(200, msec);
+			vex::wait(200, msec);
 		}
-		wait(10, msec);
+
+		vex::wait(10, msec);
 	}
+
 	// Show final result
 	    distanceTraveled = std::sqrt(chassis.odom.x * chassis.odom.x + chassis.odom.y * chassis.odom.y);
 	    Controller1.Screen.clearScreen();
@@ -514,13 +517,13 @@ void	backupSkills(void)
 	drive(70, 50, 5000);
 }
 
-int	main(void)
+int main(void)
 {
 	pre_auton();
 	Competition.autonomous(autonomous);
 	Competition.drivercontrol(usercontrol);
 	while (true)
 	{
-		wait(100, msec);
+		vex::wait(100, msec);
 	}
 }
