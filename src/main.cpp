@@ -550,10 +550,36 @@ void matchAutonRightAveryVersion(void)
 
 void matchAutonRightNew()
 {
+	calibrateIMU();
+	resetEncoders();
+  
+	Brain.Screen.print("Avery Match Auton NEW: RIGHT");
+
+	odometry.reset();
+	drivePID.reset();
+	turnPID.reset();
+	
 	//pick up 3 balls
 	//match load 3 balls
 	//score 7 balls
 	//use descore to push balls to get control bonus
+
+	intakeMotor.spin(reverse); //MATCH LOAD the entire time
+	driveWithPID(32);
+	wait(1000, msec);
+
+	turnWithPID(100);
+	matchLoaderToggle();
+	updateOdometry();
+	driveWithPID(45);
+	turnWithPID(150);
+	driveWithPID(6);
+	//turnWithPID(155);
+	// wait(2000,msec);
+	// driveWithPID(30);
+	// intakeMotor.spin(reverse);
+	// outputMotor.spin(reverse);
+
 }
 
 void matchAutonLeft(void)
@@ -682,7 +708,7 @@ void autonomous(void)
 	if (skillsMode)
 		skillsAuton();
 	else if (matchAutonSide)
-		matchAutonRightAveryVersion();
+		matchAutonRightNew();
 	else
 		matchAutonLeft();
 }
