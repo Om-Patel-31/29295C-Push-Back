@@ -550,7 +550,6 @@ void matchAutonRightAveryVersion(void)
 
 void matchAutonRightNew()
 {
-	calibrateIMU();
 	resetEncoders();
   
 	Brain.Screen.print("Avery Match Auton NEW: RIGHT");
@@ -567,18 +566,16 @@ void matchAutonRightNew()
 	intakeMotor.spin(reverse); //MATCH LOAD the entire time
 	driveWithPID(32);
 	wait(1000, msec);
-
-	turnWithPID(100);
 	matchLoaderToggle();
+	turnWithPID(85);
 	updateOdometry();
-	driveWithPID(45);
+	driveWithPID(44);
 	turnWithPID(150);
-	driveWithPID(6);
-	//turnWithPID(155);
-	// wait(2000,msec);
-	// driveWithPID(30);
-	// intakeMotor.spin(reverse);
-	// outputMotor.spin(reverse);
+	driveWithPID(22);
+	wait(2000, msec);
+	driveWithPID(-44);
+	intakeMotor.spin(reverse);
+	outputMotor.spin(reverse);
 
 }
 
