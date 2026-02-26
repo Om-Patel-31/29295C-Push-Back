@@ -583,9 +583,12 @@ void	skillsAuton(void)
 	// matchLoaderToggle();
 	// drive(60, 30, 4000, 0.75, 0.01, 0.5);
 	// matchLoaderToggle();
-	drive(55.0, 100, 2000, 3.5, 0.5, 0.01);
-	turn(-50.0);
-	// drive(40.0);
+	// drive(55.0, 100, 2000, 3.5, 0.5, 0.01);
+	// turn(-50.0);
+	// drive(20.0);
+	// wait(2000, msec);
+	drive(20.0);
+	turn(-90);
 
 	Controller1.rumble(".-");
 }
