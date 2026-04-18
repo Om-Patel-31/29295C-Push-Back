@@ -6,36 +6,43 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
-// Simple 2D odometry for a differential-drive robot.
-// Units and frame:
-// - Linear units: inches. Heading: degrees.
-// - Coordinate frame: +X is 0 deg, +Y is 90 deg, angles increase CCW.
-// - `update()` expects delta wheel travel (inches) since last call and
-//   an absolute IMU heading (deg).
+// OdometryTracker
+//
+// Purpose:
+// Maintain a global 2D pose estimate (x, y, heading) for differential drive.
+//
+// Coordinate frame used by this template:
+// - Linear units: inches
+// - Angular units: degrees
+// - +X axis = 0 deg
+// - +Y axis = 90 deg
+// - Positive rotation is counter-clockwise (CCW)
+//
+// Data flow:
+// 1) Chassis computes left/right incremental travel since last loop.
+// 2) Chassis passes those deltas plus absolute IMU heading to update().
+// 3) This tracker integrates position and stores latest heading.
 
 class OdometryTracker {
 public:
-  // Global position (inches). x increases along 0 deg, y along 90 deg.
+  // Global position in inches.
   double x = 0.0;
   double y = 0.0;
 
-  // Heading in degrees (absolute IMU reading). 0 = +X, increases CCW.
+  // Heading in degrees from IMU reference. 0 = +X, increases CCW.
   double heading = 0.0;
 
-  // Physical params (inches):
-  // - wheelBase: distance between left and right drive wheels (used if
-  //   you later compute rotation from differential travel).
-  // - trackingWheelRadius: encoder/tracking wheel radius (for conversions).
+  // Optional geometry values kept here for future model upgrades.
   double wheelBase = 12;
   double trackingWheelRadius = 3.25;
 
   // Advance pose by average wheel travel along IMU heading.
   // Parameters:
-  // - leftDist/rightDist: incremental linear travel (inches) of drive
-  //   wheels since last update. Positive = forward.
-  // - imuHeading: absolute heading from IMU (degrees).
-  // Behavior: uses avg distance = (left+right)/2 to step (x,y) along
-  // the IMU heading and stores imuHeading in `heading`.
+  // - leftDist/rightDist: incremental linear travel (inches) since last call.
+  // - imuHeading: absolute IMU heading (deg).
+  // Implementation notes:
+  // - Uses average distance = (leftDist + rightDist) / 2.
+  // - Uses imuHeading for global orientation.
   void update(double leftDist, double rightDist, double imuHeading) {
     double avgDist = (leftDist + rightDist) / 2.0;
 
@@ -50,29 +57,28 @@ public:
     y += avgDist * std::sin(headingRad);
   }
 
-  // Reset pose to (0,0,0) (inches, degrees)
+  // Reset pose to origin.
   void reset() {
     x = 0.0;
     y = 0.0;
     heading = 0.0;
   }
 
-  // Set pose explicitly (use to initialize), heading in degrees
+  // Set pose explicitly (for autonomous initialization).
   void setPosition(double newX, double newY, double newHeading) {
     x = newX;
     y = newY;
     heading = newHeading;
   }
 
-  // Euclidean distance to target (inches)
+  // Euclidean distance to target point in inches.
   double distanceTo(double targetX, double targetY) {
     double dx = targetX - x;
     double dy = targetY - y;
     return std::sqrt(dx * dx + dy * dy);
   }
 
-  // Heading (deg) from current position toward target (absolute, same
-  // 0=+X, CCW positive). Useful for aiming or path-following.
+  // Absolute heading (deg) from current pose to target point.
   double headingTo(double targetX, double targetY) {
     double dx = targetX - x;
     double dy = targetY - y;

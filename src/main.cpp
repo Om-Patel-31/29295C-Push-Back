@@ -1,5 +1,6 @@
 #include "Chassis.h"
 #include "DriverControl.h"
+#include "MotionAPI.h"
 #include "vex.h"
 #include <cmath>
 #include <vector>
@@ -32,16 +33,24 @@ vex::motor intakeMotor(vex::PORT1, ratio6_1, true);
 vex::motor outputMotor(vex::PORT6, ratio6_1, false);
 vex::motor_group intakeGroup(intakeMotor, outputMotor);
 
-digital_out		MatchLoader(Brain.ThreeWirePort.C);
-digital_out		DeScorePiston(Brain.ThreeWirePort.B);
+digital_out		MatchLoader(Brain.ThreeWirePort.B);
+digital_out		DeScorePiston(Brain.ThreeWirePort.C);
 digital_out		middleScore(Brain.ThreeWirePort.A);
 
 vex::inertial inertialSensor = vex::inertial(PORT21);
-Chassis			chassis(leftSide, rightSide, inertialSensor);
+vex::rotation leftOdoFront(vex::PORT11, false);
+vex::rotation leftOdoBack(vex::PORT12, false);
+vex::rotation rightOdoFront(vex::PORT13, true);
+vex::rotation rightOdoBack(vex::PORT14, true);
+vex::gps gpsSensor(vex::PORT20, 0.0, 0.0, vex::distanceUnits::mm, 0.0);
+vex::distance frontDistanceSensor(vex::PORT15);
+Chassis			chassis(leftSide, rightSide, inertialSensor,
+	leftOdoFront, leftOdoBack, rightOdoFront, rightOdoBack, &gpsSensor,
+	&frontDistanceSensor);
 
 // Set this variable to choose which auton to run:
 // 0 = leftAuton, 1 = rightAuton, 2 = skillsAuton, 3 = skillsAuton2
-int				selectedAuton = 2;
+int				selectedAuton = 0;
 
 // Forward declarations for functions defined later
 void			calibrateIMU(void);
@@ -229,7 +238,22 @@ void	drive(double dist, int velocity = 100, int timeout = 5000,
 		double kP = NAN, double kI = NAN, double kD = NAN)
 {
 	chassis.drive(dist, velocity, timeout, kP, kI, kD);
+	chassis.left.stop();
+	chassis.right.stop();
 }
+
+// Short API alias: direction required, distance optional.
+// Example: d(Motion::Direction::Forward);
+// Example: d(Motion::Direction::Reverse, 20);
+void	d(Motion::Direction direction,
+		double distance = Motion::defaultSegmentDistanceIn,
+		int velocity = 100, int timeout = 5000,
+		Motion::PIDTune tune = {})
+{
+	double sign = (direction == Motion::Direction::Forward) ? 1.0 : -1.0;
+	drive(sign * distance, velocity, timeout, tune.kP, tune.kI, tune.kD);
+}
+
 // turn with optional inline PID tuning
 void	turn(double heading, int timeout = 3000, double kP = NAN,
 		double kI = NAN, double kD = NAN)
@@ -237,12 +261,46 @@ void	turn(double heading, int timeout = 3000, double kP = NAN,
 	chassis.turn(heading, timeout, kP, kI, kD);
 }
 
+// Short API alias for turn
+void	t(double heading, int timeout = 3000, Motion::PIDTune tune = {})
+{
+	turn(heading, timeout, tune.kP, tune.kI, tune.kD);
+}
+
 void	resetEncoders(void)
 {
 	chassis.left.resetPosition();
 	chassis.right.resetPosition();
+	leftOdoFront.resetPosition();
+	leftOdoBack.resetPosition();
+	rightOdoFront.resetPosition();
+	rightOdoBack.resetPosition();
 	intakeGroup.resetPosition();
 	chassis.odom.reset();
+}
+
+// s_drive: go to (x,y) while converging to final heading.
+void	s_drive(double targetX, double targetY, double targetHeading,
+		int velocity = 100, int timeout = 5000,
+		double distkP = NAN, double distkI = NAN, double distkD = NAN,
+		double headkP = NAN, double headkI = NAN, double headkD = NAN,
+		bool allowSwing = true)
+{
+	chassis.s_drive(targetX, targetY, targetHeading, velocity, timeout,
+		distkP, distkI, distkD, headkP, headkI, headkD, allowSwing);
+	chassis.left.stop();
+	chassis.right.stop();
+}
+
+// Short API alias for simultaneous drive+heading.
+void	sd(double targetX, double targetY, double targetHeading,
+		int velocity = 100, int timeout = 5000,
+		Motion::SDriveTune tune = {})
+{
+	s_drive(targetX, targetY, targetHeading, velocity, timeout,
+		tune.distance.kP, tune.distance.kI, tune.distance.kD,
+		tune.heading.kP, tune.heading.kI, tune.heading.kD,
+		tune.allowSwing);
 }
 
 struct			SplinePoint
@@ -533,44 +591,57 @@ void			backupSkills(void);
 
 void	matchAutonRightRoutine(void)
 {
+	calibrateIMU();
 	resetEncoders();
 	chassis.reset();
+	
+	intakeMotor.spin(reverse);
+	drive(10);
+	turn(-90.0);
+	drive(15);
 	matchLoaderToggle();
-	drive(45, 75, 5000);
-	intakeMotor.spin(reverse);
-	turn(90.0);
-	drive(60, 75, 75, 4000);
-		// Drives 60 units while rotating 75 degrees at 75% speed, 4s timeout
-	wait(2000, msec);
-	intakeMotor.stop();
-	drive(-30);
-	intakeMotor.spin(reverse);
+	drive(20);
+	drive(-10);
+	turn(25);
+	drive(36.5, 100, 5000, 3);
+	turn(90);
+	drive(22, 30, 2000, 1);
+	wait(100, msec);
+	drive(-10, 100, 1000, 2);
+	turn(91.0);
+	drive(-30, 50, 2000, 4);
 	outputMotor.spin(reverse);
-	wait(2000, msec);
-	intakeMotor.stop();
+	wait(3500, msec);
 	outputMotor.stop();
-	matchLoaderToggle();
+	
 	Controller1.rumble(".-");
 }
 
 void	matchAutonLeftRoutine(void)
 {
+	calibrateIMU();
 	resetEncoders();
 	chassis.reset();
-	drive(32);
-	wait(500, msec);
-	turn(105);
-	matchLoaderToggle();
-	drive(45);
-	turn(150);
-	drive(4);
-	wait(1500, msec);
-	drive(-40);
+	
+	intakeMotor.spin(reverse);
 	drive(10);
-	turn(240);
-	drive(-15);
-	turn(150);
+	turn(90.0);
+	drive(15);
+	matchLoaderToggle();
+	drive(20);
 	drive(-10);
+	turn(-30);
+	drive(35, 100, 5000, 3);
+	turn(-90);
+	drive(20, 30, 2000, 1);
+	wait(100, msec);
+	drive(-10, 100, 1000, 2);
+	turn(-91.0);
+	drive(-30, 50, 2000, 4);
+	outputMotor.spin(reverse);
+	wait(3500, msec);
+	outputMotor.stop();
+	
 	Controller1.rumble(".-");
 }
 
@@ -579,16 +650,75 @@ void	skillsAuton(void)
 	calibrateIMU();
 	resetEncoders();
 	chassis.reset();
-	// intakeMotor.spin(reverse);
-	// matchLoaderToggle();
-	// drive(60, 30, 4000, 0.75, 0.01, 0.5);
-	// matchLoaderToggle();
-	drive(55.0, 100, 2000, 3.5, 0.5, 0.01);
-	turn(-50.0);
-	drive(20.0);
+	intakeMotor.spin(reverse);
+	drive(42.5, 100, 2000, 3, 0.5, 0.01);
+	matchLoaderToggle();
+	deScorePistonToggle();
+	turn(90);
+	drive(16, 30, 2000, 1);
+	wait(1000, msec);
+	drive(2, 30, 2000, 1);
+	matchLoaderToggle();
+	drive(-12, 100, 1000, 2);
+	turn(135.0);
+	drive(-28.35, 100, 2000, 3);
+	turn(90);
+	drive(-85, 75, 2000, 2, 0.5, 0.01);
+	turn(0);
+	drive(-18.5, 100, 2000, 3);
+	turn(-90);
+	matchLoaderToggle();
+	drive(-21.5);
+	outputMotor.spin(reverse);
 	wait(2000, msec);
-	drive(-15.0);
-
+	outputMotor.stop();
+	drive(17.5, 30, 2000, 1);
+	turn(-90);
+	drive(23, 30, 2000, 1);
+	wait(1000, msec);
+	drive(2, 30, 2000, 1);
+	drive(-12.5, 100, 2000, 2);
+	matchLoaderToggle();
+	turn(-88);
+	drive(-28.5, 100, 2000, 2);
+	outputMotor.spin(reverse);
+	wait(2000, msec);
+	outputMotor.stop();
+	drive(15);
+	turn(-180);
+	drive(125.5, 70, 2000, 3, 0.5, 0.01);
+	matchLoaderToggle();
+	turn(-90);
+	drive(30, 30, 2000, 1);
+	wait(1000, msec);
+	drive(2, 30, 2000, 1);
+	drive(-15, 100, 2000, 2);
+	matchLoaderToggle();
+	turn(-45);
+	drive(-29.35, 100, 2000, 3);
+	turn(-90);
+	drive(-85, 75, 2000, 2, 0.5, 0.01);
+	turn(-180);
+	drive(-18, 100, 2000, 3);
+	turn(90);
+	drive(-23);
+	outputMotor.spin(reverse);
+	wait(2000, msec);
+	outputMotor.stop();
+	drive(17.5, 30, 2000, 1);
+	turn(90);
+	drive(23, 30, 2000, 1);
+	wait(1000, msec);
+	drive(2, 30, 2000, 1);
+	drive(-15, 100, 2000, 2);
+	matchLoaderToggle();
+	turn(91);
+	drive(-30, 100, 2000, 2);
+	outputMotor.spin(reverse);
+	matchLoaderToggle();
+	wait(2000, msec);
+	outputMotor.stop();
+	
 	Controller1.rumble(".-");
 }
 
@@ -631,8 +761,10 @@ void	pre_auton(void)
 	rightSide.setStopping(vex::brakeType::coast);
 	intakeMotor.setStopping(vex::brakeType::brake);
 	outputMotor.setStopping(vex::brakeType::brake);
-	intakeMotor.setVelocity(50, percent);
+	intakeMotor.setVelocity(100, percent);
 	outputMotor.setVelocity(100, percent);
+	chassis.setGPSFusion(true);
+	chassis.setDistanceFusion(true);
 	calibrateIMU();
 	Controller1.ButtonR1.pressed(intakeForwardPressed);
 	Controller1.ButtonR1.released(intakeForwardReleased);
@@ -642,9 +774,9 @@ void	pre_auton(void)
 	Controller1.ButtonL1.released(outputForwardReleased);
 	Controller1.ButtonL2.pressed(outputReversePressed);
 	Controller1.ButtonL2.released(outputReverseReleased);
-	Controller1.ButtonX.pressed(matchLoaderToggle);
-	Controller1.ButtonA.pressed(deScorePistonToggle);
-	Controller1.ButtonB.pressed(middleScoreToggle);
+	Controller1.ButtonA.pressed(middleScoreToggle);
+	Controller1.ButtonB.pressed(matchLoaderToggle);
+	Controller1.ButtonY.pressed(deScorePistonToggle);
 	Controller1.ButtonUp.pressed(toggleIntakeOutputVelocity);
 }
 
@@ -672,31 +804,41 @@ void	autonomous(void)
 
 void	usercontrol(void)
 {
-	double	forward;
-	double	turn;
-	double	leftPower;
-	double	rightPower;
+	double forward;
+	double turn;
+	double leftPower;
+	double rightPower;
+	double expo = driverControl.getExponent();
 
+	const double minThreshold = 5.0; // Minimum joystick value to respond
 	while (true)
 	{
-		// Split arcade: left stick Y for forward/back
+		// Split arcade: left stick Y for forward/back, right stick X for turn
 		forward = Controller1.Axis3.position();
 		turn = Controller1.Axis1.position();
-		leftPower = forward + turn;
-		rightPower = forward - turn;
-		chassis.left.setVelocity(leftPower, percent);
-		chassis.right.setVelocity(rightPower, percent);
-		// Stop motors if no input
-		if (std::abs(leftPower) < 0.5 && std::abs(rightPower) < 0.5)
-		{
-			chassis.left.stop(coast);
-			chassis.right.stop(coast);
-		}
-		else
-		{
-			chassis.left.spin((leftPower >= 0.0) ? vex::forward : vex::reverse);
-			chassis.right.spin((rightPower >= 0.0) ? vex::forward : vex::reverse);
-		}
+
+		// Ignore small joystick values
+		if (std::abs(forward) < minThreshold) forward = 0.0;
+		if (std::abs(turn) < minThreshold) turn = 0.0;
+
+		// Exponential response
+		double maxInput = 100.0;
+		double normFwd = clamp(forward / maxInput, -1.0, 1.0);
+		double normTurn = clamp(turn / maxInput, -1.0, 1.0);
+		normFwd = std::copysign(std::pow(std::abs(normFwd), expo), normFwd);
+		normTurn = std::copysign(std::pow(std::abs(normTurn), expo), normTurn);
+
+		// Calculate motor powers
+		leftPower = clamp(normFwd * maxInput + normTurn * maxInput, -100.0, 100.0);
+		rightPower = clamp(normFwd * maxInput - normTurn * maxInput, -100.0, 100.0);
+
+		chassis.left.setVelocity(std::abs(leftPower), percent);
+		chassis.right.setVelocity(std::abs(rightPower), percent);
+
+		// Always spin motors, even for zero input, for instant response
+		chassis.left.spin((leftPower >= 0.0) ? vex::forward : vex::reverse);
+		chassis.right.spin((rightPower >= 0.0) ? vex::forward : vex::reverse);
+		vex::wait(5, msec); // Ultra-fast update
 	}
 }
 
