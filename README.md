@@ -25,7 +25,7 @@ To publish with the included workflow:
 
 ## Screenshot or Video
 
-Upload at least one project screenshot or a short demo video, then link it here. This still has to be hosted or attached in your submission flow.
+Screenshot provided in the submission flow. If you add a hosted copy later, link it here as well.
 
 Suggested format:
 
