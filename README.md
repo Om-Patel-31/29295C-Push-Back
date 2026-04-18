@@ -11,15 +11,21 @@
 
 ## Live Demo
 
-Experienceable link: add the published URL for the deployed project here.
+Experienceable link: publish the repository to GitHub Pages and paste the live URL here.
 
 Recommended deployment target:
 
 - GitHub Pages from the repository root, using `index.html` as the entry point.
 
+To publish with the included workflow:
+
+1. Push the repo to GitHub.
+2. Enable GitHub Pages using the `GitHub Actions` source.
+3. The workflow in `.github/workflows/pages.yml` will deploy the static site.
+
 ## Screenshot or Video
 
-Upload at least one project screenshot or a short demo video, then link it here.
+Upload at least one project screenshot or a short demo video, then link it here. This still has to be hosted or attached in your submission flow.
 
 Suggested format:
 
